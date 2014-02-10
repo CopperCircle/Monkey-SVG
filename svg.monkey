@@ -2,16 +2,17 @@
 
 Strict
 
-Import xml
 Import mojo
+Import xml
+Import triangulate
 
 Class SVG_Demo Extends App
 	Field test:SVG = New SVG
 	Field testX:Float, testY:Float, testSX:Float=1, testSY:Float=1, testRotate:Float
 
 	Method OnCreate:Int()
-		test.LoadSVG("monkey.svg")
-		'test.LoadSVG("text.svg")
+		'test.LoadSVG("monkey.svg")
+		test.LoadSVG("concave.svg")
 
 		SetUpdateRate 60
 		Return 0
@@ -37,6 +38,7 @@ Class SVG_Demo Extends App
 
 		test.DrawSVG(testX, testY, testRotate, testSX, testSY)
 
+		SetColor(255,255,255)
 		DrawText("Cursor keys to rotate/zoom, +/- to change curve resolution", 10, 10)
 		
 		Return 0
@@ -182,7 +184,7 @@ Class SVG
 		
 		xy=DrawPath(command, xy, path[tag..path.Length], stroke)
 		
-		If stroke=False	DrawPoly(poly)
+		If stroke=False	DrawTriangulatedPoly(poly)
 		poly=[]
 	End Method
 	
@@ -305,9 +307,19 @@ Class SVG
 			AddToPoly(points[l], points[l+1])
 		Next
 		
-		DrawPoly(poly)
+		DrawTriangulatedPoly(poly)
 		poly=[]
-	End Method	
+	End Method
+	
+	Method DrawTriangulatedPoly:Void(poly:Float[])
+		#IF TARGET="html5"
+			DrawPoly(poly)
+		#ELSE
+			For Local triangle:Float[] = EachIn Triangulate(poly)
+				DrawPoly(triangle)
+			Next
+		#ENDIF
+	End Method
 	
 	Method AddToPoly:Void(px:Float, py:Float)
 		poly=poly.Resize(poly.Length+2)
