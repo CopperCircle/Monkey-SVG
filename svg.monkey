@@ -12,7 +12,8 @@ Class SVG_Demo Extends App
 
 	Method OnCreate:Int()
 		'test.LoadSVG("monkey.svg")
-		test.LoadSVG("concave.svg")
+		test.LoadSVG("text.svg")		
+		'test.LoadSVG("concave.svg")
 
 		SetUpdateRate 60
 		Return 0
@@ -79,10 +80,10 @@ Class SVG
 	Field strokeDraw:Bool, strokeColor:String, strokeWidth:Int
 	
 	Method LoadSVG:Void(_file:String)
-		Local error:XMLError
-		file = ParseXML(LoadString(_file), error)
+		Local _Error:XMLError
+		file = ParseXML(LoadString(_file), _Error)
 		If file = Null
-			Error("doh!")
+			Error("doh! could not read "+_file+" _Error="+_Error)
 		Else
 			If file.GetAttribute("width") w=Int(file.GetAttribute("width")) ; width=w
 			If file.GetAttribute("height") h=Int(file.GetAttribute("height")) ; height=h
