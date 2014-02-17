@@ -1,4 +1,4 @@
-#TEXT_FILES += "*.svg"
+﻿#TEXT_FILES += "*.svg"
 
 Strict
 
@@ -11,8 +11,9 @@ Class SVG_Demo Extends App
 	Field testX:Float, testY:Float, testSX:Float=1, testSY:Float=1, testRotate:Float
 
 	Method OnCreate:Int()
+		test.LoadSVG("test.svg")
 		'test.LoadSVG("monkey.svg")
-		test.LoadSVG("text.svg")		
+		'test.LoadSVG("text.svg")		
 		'test.LoadSVG("concave.svg")
 
 		SetUpdateRate 60
@@ -51,30 +52,30 @@ Function Main:Int()
 	Return 0
 End Function
 
-'--------
+'-----------
 
 Class SVG
-	Const SVG_m:Int = 109
-	Const SVG_h:Int = 104
-	Const SVG_v:Int = 118
-	Const SVG_l:Int = 108
-	Const SVG_c:Int = 99
-	Const SVG_s:Int = 115
-	Const SVG_q:Int = 113
-	Const SVG_z:Int = 122
-	Const SVG_M:Int = 77
-	Const SVG_H:Int = 72
-	Const SVG_V:Int = 86
-	Const SVG_L:Int = 76
-	Const SVG_C:Int = 67
-	Const SVG_S:Int = 83
-	Const SVG_Q:Int = 81
+	Const SVG_m:Int = 109 ' MoveTo (Relatively Positioned)
+	Const SVG_h:Int = 104 ' Horizontal LineTo (Relatively Positioned)
+	Const SVG_v:Int = 118 ' Vertical LineTo (Relatively Positioned)
+	Const SVG_l:Int = 108 ' LineTo (Relatively Positioned)
+	Const SVG_c:Int = 99  ' CurveTo (Relatively Positioned)
+	Const SVG_s:Int = 115 ' Smooth CurveTo (Relatively Positioned)
+	Const SVG_q:Int = 113 ' Quadratic Bézier Curve (Relatively Positioned)
+	Const SVG_z:Int = 122 ' Close Path
+	Const SVG_M:Int = 77  ' MoveTo (Absolutely Positioned)
+	Const SVG_H:Int = 72  ' Horizontal LineTo (Absolutely Positioned)
+	Const SVG_V:Int = 86  ' Vertical LineTo (Absolutely Positioned)
+	Const SVG_L:Int = 76  ' LineTo (Absolutely Positioned)
+	Const SVG_C:Int = 67  ' CurveTo (Absolutely Positioned)
+	Const SVG_S:Int = 83  ' Smooth CurveTo (Absolutely Positioned)
+	Const SVG_Q:Int = 81  ' Quadratic Bézier Curve (Absolutely Positioned)
 
 	Field file:XMLDoc
 	Field x:Float, y:Float, rotation:Float, scalex:Float, scaley:Float
 	Field width:Int, height:Int, w:Int, h:Int
 	Field sx1:Float, sy1:Float
-	Field poly:Float[], fill:String
+	Field poly:Float[1][], fill:String
 	Field curveSegments:Int=10
 	Field groupAttributes:Bool
 	Field strokeDraw:Bool, strokeColor:String, strokeWidth:Int
@@ -83,7 +84,7 @@ Class SVG
 		Local _Error:XMLError
 		file = ParseXML(LoadString(_file), _Error)
 		If file = Null
-			Error("doh! could not read "+_file+" _Error="+_Error)
+			Error("doh! could not read "+_file)
 		Else
 			If file.GetAttribute("width") w=Int(file.GetAttribute("width")) ; width=w
 			If file.GetAttribute("height") h=Int(file.GetAttribute("height")) ; height=h
@@ -167,7 +168,7 @@ Class SVG
 		If node.GetAttribute("stroke-width") strokeWidth=Int(node.GetAttribute("stroke-width"))	
 	End Method
 	
-	Method ParsePath:Void(path:String, stroke:Bool=False)
+	Method ParsePath:Void(path:String, stroke:Bool)
 		Local command:Int, xy:Float[4], tag:Int
 	
 		For Local c:Int=0 Until path.Length()
@@ -184,13 +185,15 @@ Class SVG
 		Next
 		
 		xy=DrawPath(command, xy, path[tag..path.Length], stroke)
-		
+
 		If stroke=False	DrawTriangulatedPoly(poly)
-		poly=[]
+		poly=New Float[1][]
 	End Method
 	
 	Method DrawPath:Float[](command:Int, xy:Float[], value:String, stroke:Bool)
 		Local px:Float=xy[0], py:Float=xy[1]
+		Local spiltPaths:Bool=True
+		
 		Select command
 			Case SVG_M
 				Local points:Float[]=GetPoints(value)
@@ -296,7 +299,7 @@ Class SVG
 			Case SVG_z
 				If stroke DrawLine(px*scalex, py*scaley, xy[2]*scalex, xy[3]*scaley)
 				px=xy[2] ; py=xy[3]
-				AddToPoly(px, py)				
+				If spiltPaths poly=poly.Resize(poly.Length+1)
 		End Select
 		
 		Return [px,py,xy[2],xy[3]]
@@ -312,20 +315,27 @@ Class SVG
 		poly=[]
 	End Method
 	
-	Method DrawTriangulatedPoly:Void(poly:Float[])
+	Method DrawTriangulatedPoly:Void(poly:Float[][])
 		#IF TARGET="html5"
-			DrawPoly(poly)
+			For Local c:Int=0 to poly.Length-2
+				DrawPoly(poly[c])
+				SetColor(255,255,255)
+			Next
 		#ELSE
-			For Local triangle:Float[] = EachIn Triangulate(poly)
-				DrawPoly(triangle)
+			For Local c:Int=0 to poly.Length-2
+				For Local triangle:Float[] = EachIn Triangulate(poly[c])
+					DrawPoly(triangle)
+				Next
+				SetColor(255,255,255)
 			Next
 		#ENDIF
 	End Method
 	
 	Method AddToPoly:Void(px:Float, py:Float)
-		poly=poly.Resize(poly.Length+2)
-		poly[poly.Length-2]=(px*scalex)
-		poly[poly.Length-1]=(py*scaley)		
+		Local polyCount:Int = poly.Length-1
+		poly[polyCount]=poly[polyCount].Resize(poly[polyCount].Length+2)
+		poly[polyCount][poly[polyCount].Length-2]=(px*scalex)
+		poly[polyCount][poly[polyCount].Length-1]=(py*scalex)
 	End Method
 	
 	Method GetPoints:Float[](value:String)
