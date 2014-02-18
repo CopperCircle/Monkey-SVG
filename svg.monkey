@@ -199,13 +199,12 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				px=points[0] ; py=points[1]
 				xy[2]=px ; xy[3]=py
-				AddToPoly(px, py)
-	
+
 			Case SVG_m
 				Local points:Float[]=GetPoints(value)
 				px+=points[0] ; py+=points[1]
 				AddToPoly(px, py)
-						
+
 			Case SVG_H
 				If stroke DrawLine(px*scalex, py*scaley, Float(value)*scalex, py*scaley)
 				px=Float(value)
