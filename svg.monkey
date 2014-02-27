@@ -43,7 +43,7 @@ Class SVG_Demo Extends App
 	Method OnCreate:Int()
 		test.LoadSVG("tiger.svg")
 		'test.LoadSVG("monkey.svg")
-		'test.LoadSVG("text.svg")		
+		'test.LoadSVG("text.svg")
 		'test.LoadSVG("concave.svg")
 
 		SetUpdateRate 60
@@ -66,7 +66,7 @@ Class SVG_Demo Extends App
 	End Method
 	
 	Method OnRender:Int()
-		Cls(255,255,255)
+		Cls(200,200,200)
 
 		test.DrawSVG(testX, testY, testRotate, testSX, testSY)
 
@@ -92,6 +92,7 @@ Class SVG
 	Const SVG_c:Int = 99  ' CurveTo (Relatively Positioned)
 	Const SVG_s:Int = 115 ' Smooth CurveTo (Relatively Positioned)
 	Const SVG_q:Int = 113 ' Quadratic Bézier Curve (Relatively Positioned)
+	Const SVG_t:Int = 116 ' Smooth Quadratic Bézier Curve (Relatively Positioned)
 	Const SVG_z:Int = 122 ' Close Path
 	Const SVG_M:Int = 77  ' MoveTo (Absolutely Positioned)
 	Const SVG_H:Int = 72  ' Horizontal LineTo (Absolutely Positioned)
@@ -100,6 +101,7 @@ Class SVG
 	Const SVG_C:Int = 67  ' CurveTo (Absolutely Positioned)
 	Const SVG_S:Int = 83  ' Smooth CurveTo (Absolutely Positioned)
 	Const SVG_Q:Int = 81  ' Quadratic Bézier Curve (Absolutely Positioned)
+	Const SVG_T:Int = 84  ' Smooth Quadratic Bézier Curve (Absolutely Positioned)
 
 	Field file:XMLDoc
 	Field x:Float, y:Float, rotation:Float, scalex:Float, scaley:Float
@@ -170,7 +172,7 @@ Class SVG
 			
 				Case "path"
 					ParsePath(node.GetAttribute("d"), False)
-			
+
 				Case "polygon"
 					DrawPolygon(node.GetAttribute("points"))
 					
@@ -243,7 +245,7 @@ Class SVG
 			Case SVG_h
 				If stroke DrawLine(px*scalex, py*scaley, (px+Float(value))*scalex, py*scaley)
 				px+=Float(value)
-				AddToPoly(px, py)		
+				AddToPoly(px, py)
 				
 			Case SVG_V
 				If stroke DrawLine(px*scalex, py*scaley, px*scalex, Float(value)*scaley)
@@ -314,6 +316,7 @@ Class SVG
 					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)			
 				Next
+				sx1=((2*points[2]) - points[0]) ; sy1=((2*points[3]) - points[1])
 				px=points[2] ; py=points[3]
 				
 			Case SVG_q
@@ -323,7 +326,28 @@ Class SVG
 					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)
 				Next
+				sx1=px+((2*points[2]) - points[0]) ; sy1=py+((2*points[3]) - points[1])
 				px+=points[2] ; py+=points[3]
+				
+			Case SVG_T
+				Local points:Float[]=GetPoints(value)
+				Local curve:P2[]=BezierArrayQuadratic(P2.Create(px, py), P2.Create(sx1, sy1), P2.Create(points[0], points[1]), curveSegments)
+				For Local l:Int = 0 To curve.Length-1
+					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
+					AddToPoly(curve[l].X, curve[l].Y)				
+				Next
+				sx1=px+(points[0]) ; sy1=py+(points[1])	
+				px=points[0] ; py=points[1]
+				
+			Case SVG_t
+				Local points:Float[]=GetPoints(value)
+				Local curve:P2[]=BezierArrayQuadratic(P2.Create(px, py), P2.Create(sx1, sy1), P2.Create(px+points[0], py+points[1]), curveSegments)
+				For Local l:Int = 0 To curve.Length-1
+					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
+					AddToPoly(curve[l].X, curve[l].Y)			
+				Next
+				sx1=px+(points[0]) ; sy1=py+(points[1])
+				px+=points[0] ; py+=points[1]				
 			
 			Case SVG_z
 				If stroke DrawLine(px*scalex, py*scaley, xy[2]*scalex, xy[3]*scaley)
@@ -352,7 +376,7 @@ Class SVG
 			Next
 		#ELSE
 	 		Local compoundpoly:= New CompoundPolygon(poly)
-			compoundpoly.Draw 
+			compoundpoly.Draw
 		 	Return
 
 '			For Local c:Int=0 to poly.Length-2
@@ -373,14 +397,14 @@ Class SVG
 	
 	Method GetPoints:Float[](value:String)
 		Local points:Float[], tag:Int
-		
+			
 		For Local c:Int=1 Until value.Length()
 			Select value[c]
 				Case 44 ',		
 					points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c+1
 			
 				Case 32 'Space		
-					points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c+1		
+					If value[c+1]<>45 points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c+1		
 			
 				Case 45 '-
 					points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c
@@ -420,8 +444,7 @@ Function BezierArrayQuadratic:P2[](p1:P2,p2:P2,p3:P2,segments:Int)
 		
 		Local bx := a * p1.X + b * p2.X + c * p3.X
 		Local by := a * p1.Y + b * p2.Y + c * p3.Y
-		
-		If Distance(bx, by, pbx, pby)>1 result.AddLast(P2.Create(bx,by)) ; pbx=bx ; pby=by
+		If PointsAreIdentical(bx, by, pbx, pby)=False result.AddLast(P2.Create(bx,by)) ; pbx=bx ; pby=by
 	Next
 	
 	Return result.ToArray()
@@ -443,16 +466,10 @@ Function BezierArrayCubic:P2[](p1:P2,p2:P2,p3:P2,p4:P2,segments:Int)
 	    Local bx := a * p1.X + b * p2.X + c * p3.X + d * p4.X
 	    Local by := a * p1.Y + b * p2.Y + c * p3.Y + d * p4.Y
 
-		If Distance(bx, by, pbx, pby)>1 result.AddLast(P2.Create(bx,by)) ; pbx=bx ; pby=by		
+		If PointsAreIdentical(bx, by, pbx, pby)=False result.AddLast(P2.Create(bx,by)) ; pbx=bx ; pby=by	
 	Next
 	
 	Return result.ToArray()
-End Function
-
-Function Distance:Float(x1:Float, y1:Float, x2:Float, y2:Float)
-	Local dx:Float = x2 - x1
-	Local dy:Float = y2 - y1
-	Return Sqrt(dx*dx + dy*dy)
 End Function
 
 Function SetHexColor:Void(Hex:String)

@@ -5,7 +5,13 @@ Strict
 ' Chuck full of usefull routines.
 ' () 2014.02.24 - Peter Scheutz aka Difference
 
- 
+' 2014.02.26
+' v0.3  - changed Tessellate() to a while loop, keeping problem points for examination 
+'		- better detection of identical points in incomming poly
+' 		- check for intersection with all polys in HoleMerge
+'		- check that two adjacent lines connects from outer to inner poly (only use one)
+'
+' 2014.02.24 
 ' v0.2 - first release version
 
 #rem
@@ -35,6 +41,28 @@ THE SOFTWARE.
 Import mojo
 
 
+Global gIntersecsX:Float
+Global gIntersecsY:Float
+
+Global gIntersectionCorner:Int
+Global EPS:Float = 0.001
+
+
+Function PointsAreIdentical:Bool(x1:Float,y1:Float,x2:Float,y2:float)
+
+
+	' Manhatten distance should do
+	If Abs(x1-x2) < EPS
+		If Abs(y1-y2) < EPS	 		
+			Return True
+
+		Endif
+	Endif
+
+	Return False
+End Function
+
+
 'Polygon with holes 
 Class CompoundPolygon 
 	Field points:Float[]
@@ -43,10 +71,14 @@ Class CompoundPolygon
 	Field polyindexes:IndexedPolygon[] 
  
  
+ 	Field mergedpoly:IndexedPolygon
+ 
 	Method New(newpoints:Float[][])
-	
-' /* ****************** BEGIN Clean up input arrays
-' /* IMO this sould be done by the parser
+
+	 
+
+' ****************** BEGIN Clean up input arrays
+' IMO this sould be done by the parser
 		
 		If Not newpoints.Length() Return ' no polygons
 		If Not newpoints[0].Length() Return 'no point in first poly
@@ -57,21 +89,64 @@ Class CompoundPolygon
 			newpoints = newpoints[..(newpoints.Length()-1)] 
 		Endif		 
 			
-			
-		'Const EPS:Float = 0.02	
+
+ '#rem			
+
  		' remove endpoints that doubles firstpoint
 		For Local i:Int = 0 Until newpoints.Length()
-		
- 			If Abs(newpoints[i][0]-newpoints[i][newpoints[i].Length()-2]) < EPS
- 			 	If Abs(newpoints[i][1]-newpoints[i][newpoints[i].Length()-1]) < EPS
- 			 		newpoints[i] = newpoints[i][..newpoints[i].Length()-2]
- 			 		'Print "removed end point dubligating first point"
- 			 	Endif
-			Endif	 
- 		Next
- 		
- 		
-' /* ****************** END Clean up input arrays
+
+			Local skiplist:= New IntList	
+			
+			Repeat
+				skiplist.Clear()
+			
+				' a list af adjacent vertices that are identical
+				' we need to remove them or they will confuse the earclipper
+				If newpoints[i].Length()>4
+			
+					Local p3:Int = newpoints[i].Length() - 4
+					Local p2:Int = newpoints[i].Length() - 2
+					
+					For Local p1:Int = 0 Until newpoints[i].Length() Step 2
+					
+ 					 	If PointsAreIdentical(newpoints[i][p1],newpoints[i][p1+1],newpoints[i][p2],newpoints[i][p2+1])
+						'	skiplist.AddLast p2
+						'Elseif Abs(PolygonArea(newpoints[i],[p1,p2,p3])) < 0.02
+ 
+							skiplist.AddLast p2
+						Endif
+						
+						p3 = p2
+						p2 = p1
+						
+					Next	
+				
+					Local skip:Int
+					
+					For Local n:Int = 0 Until newpoints[i].Length() Step 2	
+					
+						If skiplist.Contains(n)
+							skip +=2
+						Endif
+					
+						If n+skip<newpoints[i].Length()
+							newpoints[i][n] = newpoints[i][n+skip] 
+							newpoints[i][n+1] = newpoints[i][n+skip+1] 
+						Endif
+					
+					Next
+					
+					 If skip Then 	
+					 	' truncate array to new length()
+						newpoints[i] = newpoints[i][..(newpoints[i].Length()-skip)]
+					Endif
+				
+				Endif
+			Until  skiplist.IsEmpty()  	
+		Next
+			 
+'#End 		
+' ****************** END Clean up input arrays
  		
 
 		' make a pool with all points
@@ -82,7 +157,7 @@ Class CompoundPolygon
 		' make an array for Polygons 
 		polyindexes = 	New IndexedPolygon[newpoints.Length()]
 		
-
+	
 		'make polygons that references the points in the pool
 		' each value is an offset to the x coordinate in the pool
 		Local index:Int
@@ -95,27 +170,19 @@ Class CompoundPolygon
 			Next
 		Next
 		
- 
+	 
 		' merge holes and polygon
 		' OBS for now assume all polys with index> 0 are holes 
 		' start by adding first poly, then merge holes	
-		Local mergedpoly:IndexedPolygon = polyindexes[0]
+		mergedpoly  = polyindexes[0]
 		
 		For Local holeindex:Int = 1 Until polyindexes.Length() 
-			mergedpoly = HoleMerge(points,mergedpoly,polyindexes[holeindex])
+			mergedpoly = HoleMerge(points,mergedpoly,polyindexes[holeindex],polyindexes)
 		Next
 			
+		If mergedpoly.Length()<2 Then Return
  
-
-		If mergedpoly.Length()<2 Then return
-
-		' a polygon can be triangulated with vertexcount - 2 triangles
-		trianglecount = mergedpoly.Length() - 2
-		
-		' an arrry for triangleindexes to be passed to DrawTriangles()
-		triangleindexes = New Int[trianglecount*3]
- 
-		' triangulate it
+ 		' triangulate it
 		Tessellate(points,mergedpoly)
 
 	End Method
@@ -124,22 +191,55 @@ Class CompoundPolygon
 	
 	Method Draw:Void()		
 		DrawTriangles(points,triangleindexes)
+		
+	   Return ' below this for debug only
+		
+		'Draw Problem points / parts that was not clipped 		
+		SetColor 255,0,255
+ 		
+			If mergedpoly.Length()>-2
+		
+				Local cords:= mergedpoly.ToPoints()
+			
+				DrawPoly(cords)
+				
+				SetAlpha 1
+				SetColor 255,255,0
+				For Local i:Int = 0 Until cords.Length() Step 2
+				
+					DrawText i,cords[i]+i*.002,cords[i+1]+i*.002
+				
+				Next
+			Endif
+ 		
 	End Method	
 	
 	Method Tessellate:Void(points:Float[],indexedpoly:IndexedPolygon)
-	
-		For Local i:Int = 0 Until trianglecount 
-			If indexedpoly.ClipEar()
-			
-				triangleindexes[i*3] = indexedpoly.ear[0]
-				triangleindexes[i*3+1] = indexedpoly.ear[1]
-				triangleindexes[i*3+2] = indexedpoly.ear[2]	
-			'Else
-			'	Print "Cant clip ear"
-			
-			Endif
+ 	
+		' a polygon can be triangulated with vertexcount - 2 triangles
+		trianglecount = indexedpoly.Length() - 2
+		
+		If trianglecount<=0 Then Return 
+ 	
+		' an arrry for triangleindexes to be passed to DrawTriangles()
+		triangleindexes = New Int[trianglecount*3]	
  
-		Next	
+		Local i:int
+ 
+		While indexedpoly.ClipEar()
+ 			triangleindexes[i] = indexedpoly.ear[0]
+			triangleindexes[i+1] = indexedpoly.ear[1]
+			triangleindexes[i+2] = indexedpoly.ear[2]	
+			i +=3
+		Wend
+
+		' did we loose some in the fire?
+		If i< triangleindexes.Length()
+			triangleindexes = triangleindexes[..i]
+			'Print "TRIS LOST: " + (trianglecount-i/3)			
+			trianglecount = i/3
+		Endif
+		
 
 	End Method
 	
@@ -149,8 +249,8 @@ End Class
 
 Class IndexedPolygon Extends IntStack
 	Field pool:Float[]
+	Field area:float
 	Field winding:Int
-
 	Field prepared:Bool
 
 	Field ear:Int[3]
@@ -159,14 +259,29 @@ Class IndexedPolygon Extends IntStack
 		pool = points		
 	End Method 
 	
+	' only for debugging
+	Method ToPoints:Float[]()
+		Local cords:= New Float[Self.Length()*2] 
+		Local i:Int
+		For Local n:= Eachin Self
+			cords[i] = pool[n]
+			cords[i+1] = pool[n+1]		
+			i +=2
+		Next
+	
+		Return cords
+	
+	End Method
+	
+	
 	 ' determine winding
 	Method Prepare:Void()
 	
 		If   pool.Length()<3 Then
 			Error "IndexedPolygon must have a pool"
 		Endif		
-	
-		winding = Sgn(PolygonArea(pool,Self))
+		area = PolygonArea(pool,Self)
+		winding = Sgn(area)
 		
 		prepared = true
 	End Method
@@ -175,36 +290,30 @@ Class IndexedPolygon Extends IntStack
 	' Return True if ear was clipped
 	' clipped ear indexes is in ear array	
 	Method ClipEar:Bool()
+		If Self.Length() < 3 then Return False
 	
 		If Not prepared Then Prepare()
- 			
-		Local infinitycounter:Int = Self.Length()  
-
-		Repeat 
+ 
+		Local minarea:Float = EPS  
+ 
+		For Local r:Int = 0 To  Self.Length()
 			Local f:Int = Self.Pop() 
 
-			ear[0] = Self.Top()
-			ear[1] = f
-			ear[2] = Self.Get(0)
-			
-			Local a:Float = PolygonArea(pool,ear)
-
-			If Sgn(a) = winding ' check triangle winding to ignore concave triangles (they are not ears)			
-		
-				If NoPointsInTriangle(pool,Self,ear) ' check that no point fron the main poly is in the ear (then it does not intersect)
-					Return True
+				ear[0] = Self.Top()
+				ear[1] = f
+				ear[2] = Self.Get(0)
+				
+				Local a:Float = PolygonArea(pool,ear)
+				
+				If (Sgn(a) = winding) 'Or Sgn(a) = 0 ' check triangle winding to ignore concave triangles (they are not ears)					
+					If NoPointsInTriangle(pool,Self,ear) ' check that no point fron the main poly is in the ear (then it does not intersect)
+						Return True
+					Endif
+	 			
 				Endif
- 			
-			Endif
-			
-						
-			Self.Insert(0,f)  ' roll polygon
-			
-			infinitycounter -=1
-			
-		Until infinitycounter < 0
-		
-	 	'Print "Infite  Roll, bailing out ..."  
+				Self.Insert(0,f)  ' roll polygon
+				
+			Next
 		
 		Return false
 		
@@ -305,7 +414,7 @@ Function PolygonArea:Float(pool:Float[],poly:IndexedPolygon)
 
 End Function
 
-#rem
+
 Function PolygonArea:Float(polyPoints:Float[])
 
 	Local accum:Float
@@ -319,7 +428,9 @@ Function PolygonArea:Float(polyPoints:Float[])
 	Return accum / 2.0
 
 End Function
-#end
+
+
+
 'Function params: pointpool , intarray/stack with indexes and the 3 triangle indexes to ignore
 Function NoPointsInTriangle:Bool(points:Float[],poly:IntStack,tri:Int[])
 
@@ -384,6 +495,7 @@ End Function
 
 
  
+ 
 
 
 ' find 
@@ -413,23 +525,34 @@ Function FloatArraysMerge:Float[](arr:float[][])
 End Function
 
 ' find a line that goes from outer to inner poly without crossing either of them
-Function HoleMerge:IndexedPolygon(points:Float[],poly:IndexedPolygon,hole:IndexedPolygon)
+Function HoleMerge:IndexedPolygon(points:Float[],poly:IndexedPolygon,hole:IndexedPolygon,allpolys:IndexedPolygon[])
 
+	poly.Prepare	
+	hole.Prepare	
+	
+	If poly.winding = hole.winding
+		Print "Winding the same, deal with it!"
+	
+	Endif
+	
 
 	Local ip:Int	
 	
-	For Local p:= Eachin   poly
-		Local ih:int
-		For Local h:=  Eachin hole
+	
+	Local p2:Int = poly.Get(0)
+	
+	For Local p1:= Eachin poly
+		Local ih:Int
 		
-			Local px:Float = points[p]
-			Local py:Float = points[p+1]
-
-			Local hx:Float = points[h]
-			Local hy:Float = points[h+1]
-
-			If Not SegmentIntersectsPoly(p,h,poly,points)
-				If Not SegmentIntersectsPoly(p,h,hole,points)
+		
+		Local h2:Int = hole.Get(0)
+		For Local h1:=  Eachin hole
+		
+ 
+	 		' look for two lines
+	 		' we are only using one for now
+			If Not SegmentIntersectsPolys(p1,h2,allpolys,points)
+ 			If Not SegmentIntersectsPolys(p2,h1,allpolys,points)
 
 				'	Print "Success - Hole connector found"
 				
@@ -463,7 +586,81 @@ Function HoleMerge:IndexedPolygon(points:Float[],poly:IndexedPolygon,hole:Indexe
 		
 					Return newpoly				
 				
-				Endif
+		 	Endif
+			Endif
+			
+			h2 = h1
+			
+			ih +=1
+		Next
+		
+		p2=p1
+		
+ 		ip +=1
+	Next
+
+	 Print "No connector line found between hole andf poly, returning poly without hole"
+ 
+	Return  poly
+
+End Function
+
+ 
+' find a line that goes from outer to inner poly without crossing either of them
+Function OLDHoleMerge:IndexedPolygon(points:Float[],poly:IndexedPolygon,hole:IndexedPolygon,allpolys:IndexedPolygon[])
+
+
+	Local ip:Int	
+	
+	For Local p:= Eachin poly
+		Local ih:int
+		For Local h:=  Eachin hole
+		
+			Local px:Float = points[p]
+			Local py:Float = points[p+1]
+
+			Local hx:Float = points[h]
+			Local hy:Float = points[h+1]
+
+
+			
+	 
+			If Not SegmentIntersectsPolys(p,h,allpolys,points)
+ 
+
+				'	Print "Success - Hole connector found"
+				
+					Local newpoly:= New IndexedPolygon(points) 
+
+					' insert outer poly first:	
+					For Local np:Int = ip Until poly.Length()
+						newpoly.Push poly.Get(np)	
+					Next 
+					
+					For Local np:Int = 0 Until ip
+						newpoly.Push poly.Get(np)	
+					Next 	
+					
+					'insert "break" point from outer poly again 
+					newpoly.Push poly.Get(ip)
+					
+					
+					' insert inner poly (assume it's reversed already )
+					
+					For Local np:Int = ih Until hole.Length()
+						newpoly.Push hole.Get(np)	
+					Next 
+					
+					For Local np:Int = 0 Until ih
+						newpoly.Push hole.Get(np)	
+					Next 	
+					
+					'insert "break" point from outer poly again 
+					newpoly.Push hole.Get(ih)
+		
+					Return newpoly				
+				
+		 
 			Endif
 			ih +=1
 		Next
@@ -475,14 +672,6 @@ Function HoleMerge:IndexedPolygon(points:Float[],poly:IndexedPolygon,hole:Indexe
 	Return  poly
 
 End Function
-
- 
-	
-Global gIntersecsX:Float
-Global gIntersecsY:Float
-
-Global gIntersectionCorner:Int
-Global EPS:Float = 0.001
 
 
 
@@ -500,43 +689,39 @@ Global EPS:Float = 0.001
 Function Intersects:Int(x1:Float, y1:Float, x2:Float, y2:Float, x3:Float, y3:Float, x4:Float, y4:Float )
 
 
-   Local denom:Float  = (y4-y3) * (x2-x1) - (x4-x3) * (y2-y1)
-   Local numera:Float = (x4-x3) * (y1-y3) - (y4-y3) * (x1-x3)
-   Local numerb:Float = (x2-x1) * (y1-y3) - (y2-y1) * (x1-x3)
+	Local denom:Float  = (y4-y3) * (x2-x1) - (x4-x3) * (y2-y1)
+	Local numera:Float = (x4-x3) * (y1-y3) - (y4-y3) * (x1-x3)
+	Local numerb:Float = (x2-x1) * (y1-y3) - (y2-y1) * (x1-x3)
 
-   '/* Are the line coincident? */
-   If (Abs(numera) < EPS And Abs(numerb) < EPS And Abs(denom) < EPS) Then
-      gIntersecsX = (x1 + x2) / 2
-      gIntersecsY = (y1 + y2) / 2
-      Return 1
-   Endif
+	'/* Are the line coincident? */
+	If (Abs(numera) < EPS And Abs(numerb) < EPS And Abs(denom) < EPS) Then
+		gIntersecsX = (x1 + x2) / 2
+		gIntersecsY = (y1 + y2) / 2
+		Return 1
+	Endif
 
-   '/* Are the line parallel */
-   If (Abs(denom) < EPS) Then
-      gIntersecsX = 0
-      gIntersecsY = 0
-      Return 0
-   Endif
+	'/* Are the line parallel */
+	If (Abs(denom) < EPS) Then
+		gIntersecsX = 0
+		gIntersecsY = 0
+		Return 0
+	Endif
 
-   '/* Is the intersection along the the segments */
-   Local mua:Float = numera / denom
-   Local mub:Float = numerb / denom
-
-'	Print mua + " , " + mub 
-
- 
+	'/* Is the intersection along the the segments */
+	Local mua:Float = numera / denom
+	Local mub:Float = numerb / denom
 	gIntersecsX = x1 + mua * (x2 - x1)
    	gIntersecsY = y1 + mua * (y2 - y1)
 
 	gIntersectionCorner = 0
 
 
-	If  (mua >= 0) And (mua <= 1)
-		If  (mub >= 0) And (mub <= 1)
-		
-			If mub <= EPS Then gIntersectionCorner = 1
-			If mub >= 1-EPS Then gIntersectionCorner = 2
- 		
+	If  (mua >= 0.0) And (mua <= 1.0)
+		If  (mub >= 0.0) And (mub <= 1.0)
+
+			If Abs(mub) <= EPS Then gIntersectionCorner = 3
+			If Abs(mub-1.0) <= EPS Then gIntersectionCorner = 4
+	
          	Return 4
  
 		Endif
@@ -547,17 +732,31 @@ Function Intersects:Int(x1:Float, y1:Float, x2:Float, y2:Float, x3:Float, y3:Flo
 End Function
 
 
-' Function to check if a line segment intersects a polygon
+' Function to check if a line segment intersects a single polygon
 Function SegmentIntersectsPoly:Bool(s1:Int,s2:Int,poly:IntStack,points:Float[])
 		Local i2:Int = poly.Top()
 		
 		For Local i1:= Eachin poly
 		
-			If Intersects(points[s1],points[s1+1],points[s2],points[s2+1],points[i1],points[i1+1],points[i2],points[i2+1])>2
- 				If Not gIntersectionCorner Return True
-			Endif			
+			If (i1<>s1) And (i1<>s2) And (i2<>s1) And (i2<>s2) ' avoid checking line ends
+				If Intersects(points[s1],points[s1+1],points[s2],points[s2+1],points[i1],points[i1+1],points[i2],points[i2+1])>2
+	 				 If Not gIntersectionCorner Return True
+				Endif	
+			Endif	
+						
 			i2 = i1
 		Next
 		
 		Return False
+End Function
+
+
+' wrapper to check multiple polygons 
+Function SegmentIntersectsPolys:Bool(p:Int,h:Int,polys:IndexedPolygon[],points:Float[])
+	For Local poly:= Eachin polys
+		If SegmentIntersectsPoly(p,h,poly,points)	
+			Return True
+		Endif
+	Next 
+	Return False
 End Function
