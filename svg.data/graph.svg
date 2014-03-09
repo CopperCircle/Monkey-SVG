@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="640" height="480" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg">
+	<rect width="100%" height="100%" fill="rgb(240,240,240)" stroke-width="1px" stroke="rgb(0,0,0)"/>
+	<path d="M33 458h597M33 435.95h597M33 413.9h597M33 391.85h597M33 369.8h597M33 347.75h597M33 325.7h597M33 303.65h597M33 281.6h597M33 259.55h597M33 237.5h597M33 215.45h597M33 193.4h597M33 171.35h597M33 149.3h597M33 127.25h597M33 105.2h597M33 83.15h597M33 61.1h597M33 39.05h597M33 17h597M33 17v441M232 17v441M431 17v441M630 17v441" stroke="rgb(220,220,220)"/>
+	<rect width="189" x="38" y="237.5" height="220.5" id="e2" style="fill:red;stroke:rgb(0,0,0);stroke-width:1px;"/>
+	<rect width="189" x="237" y="17" height="441" id="e3" style="fill:green;stroke:rgb(0,0,0);stroke-width:1px;"/><rect width="189" x="436" y="127.25" height="330.75" id="e4" style="fill:blue;stroke:rgb(0,0,0);stroke-width:1px;"/>
+	<path d="M33 461v-3M232 461v-3M431 461v-3M630 461v-3M30 458h3M30 435.95h3M30 413.9h3M30 391.85h3M30 369.8h3M30 347.75h3M30 325.7h3M30 303.65h3M30 281.6h3M30 259.55h3M30 237.5h3M30 215.45h3M30 193.4h3M30 171.35h3M30 149.3h3M30 127.25h3M30 105.2h3M30 83.15h3M30 61.1h3M30 39.05h3M30 17h3" stroke-width="1px" stroke="rgb(0,0,0)"/>
+	<g stroke-width="2px" stroke="rgb(0,0,0)">
+		<path d="M28 458h607"/>
+		<path d="M33 12v451"/>
+	</g>
+	<g font-size="10px" font-family="monospace" fill="rgb(0,0,0)">
+		<g text-anchor="end">
+			<text x="28" y="461">0</text>
+			<text x="28" y="438.95">10</text>
+			<text x="28" y="416.9">20</text>
+			<text x="28" y="394.85">30</text>
+			<text x="28" y="372.8">40</text>
+			<text x="28" y="350.75">50</text>
+			<text x="28" y="328.7">60</text>
+			<text x="28" y="306.65">70</text>
+			<text x="28" y="284.6">80</text>
+			<text x="28" y="262.55">90</text>
+			<text x="28" y="240.5">100</text>
+			<text x="28" y="218.45">110</text>
+			<text x="28" y="196.4">120</text>
+			<text x="28" y="174.35">130</text>
+			<text x="28" y="152.3">140</text>
+			<text x="28" y="130.25">150</text>
+			<text x="28" y="108.2">160</text>
+			<text x="28" y="86.15">170</text>
+			<text x="28" y="64.1">180</text>
+			<text x="28" y="42.05">190</text>
+			<text x="28" y="20">200</text>
+		</g>
+		<g text-anchor="middle">
+			<text y="470" x="132.5">0</text>
+			<text y="470" x="331.5">1</text>
+			<text y="470" x="530.5">2</text>
+		</g>
+	</g>
+</svg>

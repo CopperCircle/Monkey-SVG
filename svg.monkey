@@ -1,7 +1,15 @@
 ﻿'--------------------------
-' Monkey SVG Parser - v0.6
+' Monkey SVG Parser - v0.7
 ' By Lee Wade/CopperCircle
 '--------------------------
+
+'v0.7 - Refactored some code, added tesselate v0.6, added support for rgb and named colours, added stroke/polyline, added basic text support.
+'v0.6 - Added tesselate v0.3, added svg T/t commands.
+'v0.5 - Added Difference's Triangulator, fixed polygon bug.
+'v0.4 - Fix extra point creation on SVG_M commands.
+'v0.3 - Tweaked parser, updated triangulate, added split paths.
+'v0.2 - Updated skid's triangulate method.
+'v0.1 - Added skid's triangulate method. 
 
 #REM
 The MIT License (MIT)
@@ -33,18 +41,22 @@ Strict
 
 Import mojo
 Import xml
-'Import triangulate
 Import tesselate
 
 Class SVG_Demo Extends App
 	Field test:SVG = New SVG
 	Field testX:Float, testY:Float, testSX:Float=1, testSY:Float=1, testRotate:Float
+	Field font:Image
 
 	Method OnCreate:Int()
+		'test.LoadSVG("graph.svg")
 		test.LoadSVG("tiger.svg")
 		'test.LoadSVG("monkey.svg")
 		'test.LoadSVG("text.svg")
 		'test.LoadSVG("concave.svg")
+		
+		font = LoadImage("font.png", 91)
+		SetFont(font)		
 
 		SetUpdateRate 60
 		Return 0
@@ -61,16 +73,15 @@ Class SVG_Demo Extends App
 		
 		If KeyHit(KEY_EQUALS) test.curveSegments+=1
 		If KeyHit(KEY_MINUS) test.curveSegments-=1
-
+				
 		Return 0
 	End Method
 	
 	Method OnRender:Int()
-		Cls(200,200,200)
+		Cls(255,255,255)
 
 		test.DrawSVG(testX, testY, testRotate, testSX, testSY)
 
-		SetColor(255,255,255)
 		DrawText("Cursor keys to rotate/zoom, +/- to change curve resolution", 10, 10)
 		
 		Return 0
@@ -82,8 +93,9 @@ Function Main:Int()
 	Return 0
 End Function
 
-'-----------
-
+'---------
+'SVG Class
+'---------
 Class SVG
 	Const SVG_m:Int = 109 ' MoveTo (Relatively Positioned)
 	Const SVG_h:Int = 104 ' Horizontal LineTo (Relatively Positioned)
@@ -107,10 +119,15 @@ Class SVG
 	Field x:Float, y:Float, rotation:Float, scalex:Float, scaley:Float
 	Field width:Int, height:Int, w:Int, h:Int
 	Field sx1:Float, sy1:Float
-	Field poly:Float[1][], fill:String
+	Field poly:Float[1][]
 	Field curveSegments:Int=10
 	Field groupAttributes:Bool
-	Field strokeDraw:Bool, strokeColor:String, strokeWidth:Int
+	
+	'Drawing Atrributes
+	Field fill:String
+	Field strokeDraw:Bool, stroke:String, strokeWidth:Float
+	Field textAnchor:Float
+	Field attX:Float, attY:Float, attW:Float, attH:Float
 	
 	Method LoadSVG:Void(_file:String)
 		Local _Error:XMLError
@@ -135,23 +152,24 @@ Class SVG
 	
 	Method DrawNodes:Void(nodes:XMLNode)
 		For Local node:= EachIn nodes.GetChildren()
-			SetAttributes(node)
+			GetAttributes(node)
+
 			Select node.name
 				Case "rect"
 					If strokeDraw
-						SetHexColor(strokeColor)
-						DrawRect(Float(node.GetAttribute("x"))*scalex, Float(node.GetAttribute("y"))*scaley, Float(node.GetAttribute("width"))*scalex, Float(node.GetAttribute("height"))*scaley)						
-						SetHexColor(fill)
-						DrawRect((Float(node.GetAttribute("x"))*scalex)+strokeWidth, (Float(node.GetAttribute("y"))*scaley)+strokeWidth, (Float(node.GetAttribute("width"))*scalex)-(strokeWidth*2), (Float(node.GetAttribute("height"))*scaley)-(strokeWidth*2))						
+						SetSVGColor(stroke)
+						DrawRect(attX*scalex, attY*scaley, attW*scalex, attH*scaley)						
+						SetSVGColor(fill)
+						DrawRect((attX*scalex)+strokeWidth, (attY*scaley)+strokeWidth, (attW*scalex)-(strokeWidth*2), (attH*scaley)-(strokeWidth*2))						
 					Else
-						DrawRect(Float(node.GetAttribute("x"))*scalex, Float(node.GetAttribute("y"))*scaley, Float(node.GetAttribute("width"))*scalex, Float(node.GetAttribute("height"))*scaley)
+						DrawRect(attX*scalex, attY*scaley, attW*scalex, attH*scaley)
 					EndIf
 					
 				Case "circle"
 					If strokeDraw
-						SetHexColor(strokeColor)
+						SetSVGColor(stroke)
 						DrawEllipse(Float(node.GetAttribute("cx"))*scalex, Float(node.GetAttribute("cy"))*scaley, Float(node.GetAttribute("r"))*scalex, Float(node.GetAttribute("r"))*scaley)
-						SetHexColor(fill)
+						SetSVGColor(fill)
 						DrawEllipse(Float(node.GetAttribute("cx"))*scalex, Float(node.GetAttribute("cy"))*scaley, (Float(node.GetAttribute("r"))*scalex)-strokeWidth, (Float(node.GetAttribute("r"))*scaley)-strokeWidth)					
 					Else					
 						DrawEllipse(Float(node.GetAttribute("cx"))*scalex, Float(node.GetAttribute("cy"))*scaley, Float(node.GetAttribute("r"))*scalex, Float(node.GetAttribute("r"))*scaley)
@@ -159,9 +177,9 @@ Class SVG
 
 				Case "ellipse"
 					If strokeDraw
-						SetHexColor(strokeColor)
+						SetSVGColor(stroke)
 						DrawEllipse(Float(node.GetAttribute("cx"))*scalex, Float(node.GetAttribute("cy"))*scaley, Float(node.GetAttribute("rx"))*scalex, Float(node.GetAttribute("ry"))*scaley)
-						SetHexColor(fill)
+						SetSVGColor(fill)
 						DrawEllipse(Float(node.GetAttribute("cx"))*scalex, Float(node.GetAttribute("cy"))*scaley, (Float(node.GetAttribute("rx"))*scalex)-strokeWidth, (Float(node.GetAttribute("ry"))*scaley)-strokeWidth)					
 					Else					
 						DrawEllipse(Float(node.GetAttribute("cx"))*scalex, Float(node.GetAttribute("cy"))*scaley, Float(node.GetAttribute("rx"))*scalex, Float(node.GetAttribute("ry"))*scaley)
@@ -171,66 +189,117 @@ Class SVG
 					DrawLine(Float(node.GetAttribute("x1"))*scalex, Float(node.GetAttribute("y2"))*scaley, Float(node.GetAttribute("x2"))*scalex, Float(node.GetAttribute("y2"))*scaley)
 			
 				Case "path"
-					ParsePath(node.GetAttribute("d"), False)
+					ParsePath(node.GetAttribute("d"))
 
 				Case "polygon"
 					DrawPolygon(node.GetAttribute("points"))
 					
 				Case "polyline"
-					DrawPolygon(node.GetAttribute("points"))					
+					DrawPolyline(node.GetAttribute("points"))
+					
+				Case "text"
+					DrawText(node.value, Float(node.GetAttribute("x"))*scalex, Float(node.GetAttribute("y"))*scaley, textAnchor, 0.8)
 
 				Case "g"
 					groupAttributes=False
-					SetAttributes(node, True)
+					GetAttributes(node, True)
 					DrawNodes(node)
 			End Select
 		Next
 	End Method
 	
-	Method SetAttributes:Void(node:XMLNode, group:Bool=False)
-		If groupAttributes=False SetColor(0,0,0) ; SetAlpha(1) ; strokeDraw=False ; strokeWidth=1
+	Method GetAttributes:Void(node:XMLNode, group:Bool=False)
+		If groupAttributes=False SetColor(0,0,0) ; SetAlpha(1) ; fill="none" ; strokeDraw=False ; strokeWidth=1
+		
+		If node.GetAttribute("x") attX=Float(node.GetAttribute("x"))
 
-		If node.GetAttribute("fill") fill=node.GetAttribute("fill") ; SetHexColor(fill)
-		If node.GetAttribute("fill-opacity") SetAlpha(Float(node.GetAttribute("fill-opacity")))
-		If node.GetAttribute("opacity")
-			SetAlpha(Float(node.GetAttribute("opacity")))
-			If group groupAttributes=True
+		If node.GetAttribute("y") attY=Float(node.GetAttribute("y"))
+
+		If node.GetAttribute("width")
+			If node.GetAttribute("width").Contains("%")
+				attX=0
+				attW=(Float(file.GetAttribute("width"))/100.0)*Int(node.GetAttribute("width")[0..node.GetAttribute("width").Length-1])
+			Else
+				attW=Float(node.GetAttribute("width"))
+			EndIf
 		EndIf
-		If node.GetAttribute("stroke") strokeDraw=True ; strokeColor=node.GetAttribute("stroke")
-		If node.GetAttribute("stroke-width") strokeWidth=Int(node.GetAttribute("stroke-width"))	
+
+		If node.GetAttribute("height")
+			If node.GetAttribute("height").Contains("%")
+				attY=0
+				attH=(Float(file.GetAttribute("height"))/100.0)*Int(node.GetAttribute("height")[0..node.GetAttribute("height").Length-1])
+			Else
+				attH=Float(node.GetAttribute("height"))
+			EndIf
+		EndIf
+
+		If node.GetAttribute("style")
+			Local style:String=node.GetAttribute("style")
+			fill=style[style.Find(":")+1..style.Find(";")]
+			SetSVGColor(fill)
+			If style.Find("stroke") strokeDraw=True ; stroke="#000000"
+		EndIf
+		
+		If node.GetAttribute("text-anchor")
+			Select node.GetAttribute("text-anchor")
+				Case "start"
+					textAnchor=0
+				Case "middle"
+					textAnchor=0.5
+				Case "end"
+					textAnchor=1
+			End Select
+		EndIf
+
+		If node.GetAttribute("fill") fill=node.GetAttribute("fill") ; SetSVGColor(fill)
+
+		If node.GetAttribute("fill-opacity") SetAlpha(Float(node.GetAttribute("fill-opacity")))
+
+		If node.GetAttribute("opacity")
+			If group groupAttributes=True
+			SetAlpha(Float(node.GetAttribute("opacity")))
+		EndIf
+
+		If node.GetAttribute("stroke")
+			If group groupAttributes=True		
+			strokeDraw=True ; stroke=node.GetAttribute("stroke")
+			If node.GetAttribute("stroke-width") strokeWidth=Float(node.GetAttribute("stroke-width"))
+		EndIf		
 	End Method
 	
-	Method ParsePath:Void(path:String, stroke:Bool)
+	Method ParsePath:Void(path:String)
 		Local command:Int, xy:Float[4], tag:Int
 	
 		For Local c:Int=0 Until path.Length()
-			Select path[c]											
+			Select path[c]
 				Case SVG_z
-					xy=DrawPath(command, xy, path[tag..c], stroke)
+					xy=DrawPath(command, xy, path[tag..c])
 					command=path[c] ; tag=0
+					poly=poly.Resize(poly.Length+1) ' Split Paths
 				Default
 					If path[c]>64
-						xy=DrawPath(command, xy, path[tag..c], stroke)
+						xy=DrawPath(command, xy, path[tag..c])
 						command=path[c] ; tag=c+1
 					EndIf		
 			End Select
 		Next
 		
-		xy=DrawPath(command, xy, path[tag..path.Length], stroke)
+		xy=DrawPath(command, xy, path[tag..path.Length])
 
-		If stroke=False	DrawTriangulatedPoly(poly)
+		'If fill<>"none"
+		DrawTriangulatedPoly(poly)
 		poly=New Float[1][]
 	End Method
 	
-	Method DrawPath:Float[](command:Int, xy:Float[], value:String, stroke:Bool)
+	Method DrawPath:Float[](command:Int, xy:Float[], value:String)
 		Local px:Float=xy[0], py:Float=xy[1]
-		Local spiltPaths:Bool=True
 		
 		Select command
 			Case SVG_M
 				Local points:Float[]=GetPoints(value)
 				px=points[0] ; py=points[1]
 				xy[2]=px ; xy[3]=py
+				AddToPoly(px, py)
 
 			Case SVG_m
 				Local points:Float[]=GetPoints(value)
@@ -238,34 +307,28 @@ Class SVG
 				AddToPoly(px, py)
 
 			Case SVG_H
-				If stroke DrawLine(px*scalex, py*scaley, Float(value)*scalex, py*scaley)
 				px=Float(value)
 				AddToPoly(px, py)
 						
 			Case SVG_h
-				If stroke DrawLine(px*scalex, py*scaley, (px+Float(value))*scalex, py*scaley)
 				px+=Float(value)
 				AddToPoly(px, py)
 				
 			Case SVG_V
-				If stroke DrawLine(px*scalex, py*scaley, px*scalex, Float(value)*scaley)
 				py=Float(value)	
 				AddToPoly(px, py)
 							
 			Case SVG_v
-				If stroke DrawLine(px*scalex, py*scaley, px*scalex, (py+Float(value))*scaley)
 				py+=Float(value)
-				AddToPoly(px, py)		
+				AddToPoly(px, py)
 				
 			Case SVG_L
 				Local points:Float[]=GetPoints(value)
-				If stroke DrawLine(px*scalex, py*scaley, points[0]*scalex, points[1]*scaley)
 				px=points[0] ; py=points[1]
 				AddToPoly(px, py)		
 	
 			Case SVG_l
 				Local points:Float[]=GetPoints(value)
-				If stroke DrawLine(px*scalex, py*scaley, (px+points[0])*scalex, (py+points[1])*scaley)
 				px+=points[0] ; py+=points[1]
 				AddToPoly(px, py)
 				
@@ -273,7 +336,6 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayCubic(P2.Create(px, py), P2.Create(points[0], points[1]), P2.Create(points[2], points[3]), P2.Create(points[4], points[5]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)
 				Next
 				sx1=((2*points[4]) - points[2]) ; sy1=((2*points[5]) - points[3])		
@@ -283,7 +345,6 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayCubic(P2.Create(px, py), P2.Create(px+points[0], py+points[1]), P2.Create(px+points[2], py+points[3]), P2.Create(px+points[4], py+points[5]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)
 				Next
 				sx1=px+((2*points[4]) - points[2]) ; sy1=py+((2*points[5]) - points[3])		
@@ -293,7 +354,6 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayCubic(P2.Create(px, py), P2.Create(sx1, sy1), P2.Create(points[0], points[1]), P2.Create(points[2], points[3]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)				
 				Next
 				sx1=((2*points[2]) - points[0]) ; sy1=((2*points[3]) - points[1])	
@@ -303,7 +363,6 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayCubic(P2.Create(px, py), P2.Create(sx1, sy1), P2.Create(px+points[0], py+points[1]), P2.Create(px+points[2], py+points[3]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)			
 				Next
 				sx1=px+((2*points[2]) - points[0]) ; sy1=py+((2*points[3]) - points[1])
@@ -313,7 +372,6 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayQuadratic(P2.Create(px, py), P2.Create(points[0], points[1]), P2.Create(points[2], points[3]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)			
 				Next
 				sx1=((2*points[2]) - points[0]) ; sy1=((2*points[3]) - points[1])
@@ -323,7 +381,6 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayQuadratic(P2.Create(px, py), P2.Create(px+points[0], py+points[1]), P2.Create(px+points[2], py+points[3]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)
 				Next
 				sx1=px+((2*points[2]) - points[0]) ; sy1=py+((2*points[3]) - points[1])
@@ -333,58 +390,84 @@ Class SVG
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayQuadratic(P2.Create(px, py), P2.Create(sx1, sy1), P2.Create(points[0], points[1]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)				
 				Next
-				sx1=px+(points[0]) ; sy1=py+(points[1])	
 				px=points[0] ; py=points[1]
+				sx1=px; sy1=py
 				
 			Case SVG_t
 				Local points:Float[]=GetPoints(value)
 				Local curve:P2[]=BezierArrayQuadratic(P2.Create(px, py), P2.Create(sx1, sy1), P2.Create(px+points[0], py+points[1]), curveSegments)
 				For Local l:Int = 0 To curve.Length-1
-					If stroke DrawPoint(curve[l].X*scalex, curve[l].Y*scaley)
 					AddToPoly(curve[l].X, curve[l].Y)			
 				Next
-				sx1=px+(points[0]) ; sy1=py+(points[1])
-				px+=points[0] ; py+=points[1]				
-			
+				px+=points[0] ; py+=points[1]
+				sx1=px; sy1=py
+				
 			Case SVG_z
-				If stroke DrawLine(px*scalex, py*scaley, xy[2]*scalex, xy[3]*scaley)
 				px=xy[2] ; py=xy[3]
-				If spiltPaths poly=poly.Resize(poly.Length+1)
 		End Select
 		
 		Return [px,py,xy[2],xy[3]]
 	End Method
 	
-	Method DrawPolygon:Void(value:String, stroke:Bool=False)
+	Method DrawPolygon:Void(value:String)
 		Local points:Float[]=GetPoints(value)
 		For Local l:Int=0 To points.Length-2 Step 2
 			AddToPoly(points[l], points[l+1])
 		Next
 		
-		DrawTriangulatedPoly(poly)
+		DrawTriangulatedPoly(poly, 1)
 		poly=New Float[1][]
 	End Method
 	
-	Method DrawTriangulatedPoly:Void(poly:Float[][])	
-		#IF TARGET="html5"
-			For Local c:Int=0 to poly.Length-2
-				DrawPoly(poly[c])
-				SetColor(255,255,255)
+	Method DrawPolyline:Void(value:String)
+		Local points:Float[]=GetPoints(value)
+		For Local l:Int=0 To points.Length-2 Step 2
+			AddToPoly(points[l], points[l+1])
+		Next
+		
+		If fill<>"none"
+			DrawTriangulatedPoly(poly, 1)
+		Else
+			For Local line:= Eachin poly
+				Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, True)				 
 			Next
-		#ELSE
-	 		Local compoundpoly:= New CompoundPolygon(poly)
-			compoundpoly.Draw
-		 	Return
+		EndIf
+		poly=New Float[1][]
+	End Method
+	
+	Method DrawTriangulatedPoly:Void(poly:Float[][], clip:Int=2)
+		#IF TARGET="html5"
+			'Poly
+			For Local c:Int=0 to poly.Length-clip
+				DrawPoly(poly[c])
+			Next
 
-'			For Local c:Int=0 to poly.Length-2
-'				For Local triangle:Float[] = EachIn Triangulate(poly[c])
-'					DrawPoly(triangle)
-'				Next
-'				SetColor(255,255,255)
-'			Next
+			'Stroke
+			If strokeDraw
+				SetSVGColor(stroke)
+				Local alpha:Float=GetAlpha()				
+				If strokeWidth<1 SetAlpha(strokeWidth)
+				For Local line:= Eachin poly
+					Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, True)				 
+				Next
+				If strokeWidth<1 SetAlpha(alpha)
+			EndIf
+		#ELSE
+			'Poly
+			Tessellator.TriangulateAndDrawPolygons poly
+
+			'Stroke
+			If strokeDraw
+				SetSVGColor(stroke)
+				Local alpha:Float=GetAlpha()				
+				If strokeWidth<1 SetAlpha(strokeWidth)			
+				For Local line:= Eachin poly
+					Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, True)				 
+				Next
+				If strokeWidth<1 SetAlpha(alpha)				
+			EndIf
 		#ENDIF
 	End Method
 	
@@ -397,7 +480,7 @@ Class SVG
 	
 	Method GetPoints:Float[](value:String)
 		Local points:Float[], tag:Int
-			
+
 		For Local c:Int=1 Until value.Length()
 			Select value[c]
 				Case 44 ',		
@@ -472,8 +555,32 @@ Function BezierArrayCubic:P2[](p1:P2,p2:P2,p3:P2,p4:P2,segments:Int)
 	Return result.ToArray()
 End Function
 
-Function SetHexColor:Void(Hex:String)
-	SetColor(HexToDec(Hex[1..3]), HexToDec(Hex[3..5]), HexToDec(Hex[5..7]))
+Function SetSVGColor:Void(colour:String)
+	If colour.Contains("rgb")	'RGB
+		Local RGB:String[]=colour[4..colour.Length-1].Split(",")
+		SetColor(Int(RGB[0]), Int(RGB[1]), Int(RGB[2]))
+	ElseIf colour.Contains("#")	'HEX
+		SetColor(HexToDec(colour[1..3]), HexToDec(colour[3..5]), HexToDec(colour[5..7]))
+	Else
+		Select colour			'Named
+			Case "aqua" SetColor(0,255,255)
+			Case "black" SetColor(0,0,0)
+			Case "fuchsia" SetColor(255,0,255)
+			Case "gray" SetColor(128,128,128)
+			Case "lime" SetColor(0,255,0)
+			Case "maroon" SetColor(128,0,0)
+			Case "navy" SetColor(0,0,128)
+			Case "olive" SetColor(128,128,0)
+			Case "purple" SetColor(128,0,128)
+			Case "silver" SetColor(192,192,192)
+			Case "teal" SetColor(0,128,128)
+			Case "white" SetColor(255,255,255)
+			Case "yellow" SetColor(255,255,0)
+			Case "red" SetColor(255,0,0)
+			Case "green" SetColor(0,128,0)			
+			Case "blue" SetColor(0,0,255)
+		End Select
+	EndIf
 End Function
 
 Function HexToDec:Int(Hex:String)
@@ -500,6 +607,6 @@ Function HexToDec:Int(Hex:String)
 		Endif			
 		Conversion *= 16	'multiply conversion by 16 for next byte
 	Next
-			
+
 	Return Value
 End Function
