@@ -72,14 +72,12 @@ Function PointsAreIdentical:Bool(x1:Float,y1:Float,x2:Float,y2:float)
 	Return False
 End Function
 
- 
-
 
 Class Tessellator
 
  	 
 	Function TriangulateAndDrawPolyline:Void(points:Float[],thickness:Float,closed:Bool)
-
+		
 		Local fatline:= New  ThickPolyline(points,thickness,closed)
 		
 		fatline.Draw()

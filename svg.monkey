@@ -49,14 +49,13 @@ Class SVG_Demo Extends App
 	Field font:Image
 
 	Method OnCreate:Int()
-		'test.LoadSVG("graph.svg")
-		test.LoadSVG("tiger.svg")
+		test.LoadSVG("lines.svg")
+		'test.LoadSVG("tiger.svg")
 		'test.LoadSVG("monkey.svg")
 		'test.LoadSVG("text.svg")
-		'test.LoadSVG("concave.svg")
 		
 		font = LoadImage("font.png", 91)
-		SetFont(font)		
+		SetFont(font)
 
 		SetUpdateRate 60
 		Return 0
@@ -124,7 +123,7 @@ Class SVG
 	Field groupAttributes:Bool
 	
 	'Drawing Atrributes
-	Field fill:String
+	Field fill:String, fillOpacity:Bool
 	Field strokeDraw:Bool, stroke:String, strokeWidth:Float
 	Field textAnchor:Float
 	Field attX:Float, attY:Float, attW:Float, attH:Float
@@ -150,7 +149,7 @@ Class SVG
 		PopMatrix()
 	End Method
 	
-	Method DrawNodes:Void(nodes:XMLNode)
+	Method DrawNodes:Void(nodes:XMLNode)	
 		For Local node:= EachIn nodes.GetChildren()
 			GetAttributes(node)
 
@@ -189,9 +188,11 @@ Class SVG
 					DrawLine(Float(node.GetAttribute("x1"))*scalex, Float(node.GetAttribute("y2"))*scaley, Float(node.GetAttribute("x2"))*scalex, Float(node.GetAttribute("y2"))*scaley)
 			
 				Case "path"
+					If fill="none" And strokeDraw=False fill="black"
 					ParsePath(node.GetAttribute("d"))
 
 				Case "polygon"
+					If fill="none" And strokeDraw=False fill="black"
 					DrawPolygon(node.GetAttribute("points"))
 					
 				Case "polyline"
@@ -201,15 +202,16 @@ Class SVG
 					DrawText(node.value, Float(node.GetAttribute("x"))*scalex, Float(node.GetAttribute("y"))*scaley, textAnchor, 0.8)
 
 				Case "g"
-					groupAttributes=False
-					GetAttributes(node, True)
+					groupAttributes=True
 					DrawNodes(node)
+					groupAttributes=False
 			End Select
 		Next
 	End Method
 	
 	Method GetAttributes:Void(node:XMLNode, group:Bool=False)
 		If groupAttributes=False SetColor(0,0,0) ; SetAlpha(1) ; fill="none" ; strokeDraw=False ; strokeWidth=1
+		If fillOpacity fillOpacity=False ; SetAlpha(1)
 		
 		If node.GetAttribute("x") attX=Float(node.GetAttribute("x"))
 
@@ -251,20 +253,16 @@ Class SVG
 			End Select
 		EndIf
 
-		If node.GetAttribute("fill") fill=node.GetAttribute("fill") ; SetSVGColor(fill)
+		If node.GetAttribute("fill") fill=node.GetAttribute("fill")
 
-		If node.GetAttribute("fill-opacity") SetAlpha(Float(node.GetAttribute("fill-opacity")))
+		If node.GetAttribute("fill-opacity") fillOpacity=True ; SetAlpha(Float(node.GetAttribute("fill-opacity")))
 
-		If node.GetAttribute("opacity")
-			If group groupAttributes=True
-			SetAlpha(Float(node.GetAttribute("opacity")))
-		EndIf
+		If node.GetAttribute("opacity") SetAlpha(Float(node.GetAttribute("opacity")))
 
 		If node.GetAttribute("stroke")
-			If group groupAttributes=True		
-			strokeDraw=True ; stroke=node.GetAttribute("stroke")
+			strokeDraw=True ; stroke=node.GetAttribute("stroke") ; strokeWidth=1.0
 			If node.GetAttribute("stroke-width") strokeWidth=Float(node.GetAttribute("stroke-width"))
-		EndIf		
+		EndIf
 	End Method
 	
 	Method ParsePath:Void(path:String)
@@ -286,7 +284,6 @@ Class SVG
 		
 		xy=DrawPath(command, xy, path[tag..path.Length])
 
-		'If fill<>"none"
 		DrawTriangulatedPoly(poly)
 		poly=New Float[1][]
 	End Method
@@ -431,7 +428,7 @@ Class SVG
 			DrawTriangulatedPoly(poly, 1)
 		Else
 			For Local line:= Eachin poly
-				Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, True)				 
+				Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, False)				 
 			Next
 		EndIf
 		poly=New Float[1][]
@@ -440,9 +437,12 @@ Class SVG
 	Method DrawTriangulatedPoly:Void(poly:Float[][], clip:Int=2)
 		#IF TARGET="html5"
 			'Poly
-			For Local c:Int=0 to poly.Length-clip
-				DrawPoly(poly[c])
-			Next
+			If fill<>"none"
+				SetSVGColor(fill)
+				For Local c:Int=0 to poly.Length-clip
+					DrawPoly(poly[c])
+				Next
+			EndIf
 
 			'Stroke
 			If strokeDraw
@@ -450,13 +450,16 @@ Class SVG
 				Local alpha:Float=GetAlpha()				
 				If strokeWidth<1 SetAlpha(strokeWidth)
 				For Local line:= Eachin poly
-					Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, True)				 
+					Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, False)				 
 				Next
 				If strokeWidth<1 SetAlpha(alpha)
 			EndIf
 		#ELSE
 			'Poly
-			Tessellator.TriangulateAndDrawPolygons poly
+			If fill<>"none"
+				SetSVGColor(fill)			
+				Tessellator.TriangulateAndDrawPolygons poly
+			EndIf
 
 			'Stroke
 			If strokeDraw
@@ -464,7 +467,7 @@ Class SVG
 				Local alpha:Float=GetAlpha()				
 				If strokeWidth<1 SetAlpha(strokeWidth)			
 				For Local line:= Eachin poly
-					Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, True)				 
+					Tessellator.TriangulateAndDrawPolyline(line, strokeWidth, False)				 
 				Next
 				If strokeWidth<1 SetAlpha(alpha)				
 			EndIf
@@ -483,18 +486,18 @@ Class SVG
 
 		For Local c:Int=1 Until value.Length()
 			Select value[c]
-				Case 44 ',		
+				Case 44 ',
 					points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c+1
 			
-				Case 32 'Space		
-					If value[c+1]<>45 points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c+1		
+				Case 32 'Space
+					If c+1<value.Length And value[c+1]<>45 points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c+1
 			
 				Case 45 '-
 					points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..c]) ; tag=c
 			End Select
 		Next
 
-		points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..value.Length])		
+		points=points.Resize(points.Length+1) ; points[points.Length-1]=Float(value[tag..value.Length])
 		
 		Return points
 	End Method
@@ -563,6 +566,7 @@ Function SetSVGColor:Void(colour:String)
 		SetColor(HexToDec(colour[1..3]), HexToDec(colour[3..5]), HexToDec(colour[5..7]))
 	Else
 		Select colour			'Named
+			Case "none" SetColor(0,0,0)
 			Case "aqua" SetColor(0,255,255)
 			Case "black" SetColor(0,0,0)
 			Case "fuchsia" SetColor(255,0,255)
