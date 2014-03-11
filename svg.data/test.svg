@@ -1,9 +1,23 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Generator: Adobe Illustrator 15.0.2, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 width="127.561px" height="127.561px" viewBox="0 0 127.561 127.561" enable-background="new 0 0 127.561 127.561"
-	 xml:space="preserve">
-<path fill="#00AEEF" d="M75.236,10.177l-48.01,14.49L15.77,73.489l36.553,34.333l48.01-14.489L111.79,44.51L75.236,10.177z M74,71
-	l-25.872-0.392l-7.623-24.727l21.16-14.89l20.7,15.523L74,71z"/>
+<svg height="400" width="450">
+   <path id="lineAB" d="M 100 350 l 150 -300" stroke="red"
+   stroke-width="3" fill="none" />
+   <path id="lineBC" d="M 250 50 l 150 300" stroke="red"
+   stroke-width="3" fill="none" />
+   <path d="M 175 200 l 150 0" stroke="green" stroke-width="3"
+   fill="none" />
+   <path d="M 100 350 q 150 -300 300 0" stroke="blue"
+   stroke-width="5" fill="none" />
+   <!-- Mark relevant points -->
+   <g stroke="black" stroke-width="3" fill="black">
+     <circle id="pointA" cx="100" cy="350" r="3" />
+     <circle id="pointB" cx="250" cy="50" r="3" />
+     <circle id="pointC" cx="400" cy="350" r="3" />
+   </g>
+   <!-- Label the points -->
+   <g font-size="30" font="sans-serif" fill="black" stroke="none"
+   text-anchor="middle">
+     <text x="100" y="350" dx="-30">A</text>
+     <text x="250" y="50" dy="-10">B</text>
+     <text x="400" y="350" dx="30">C</text>
+   </g>
 </svg>
