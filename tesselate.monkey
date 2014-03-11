@@ -6,7 +6,7 @@ Strict
 ' () 2014.02.24 - Peter Scheutz aka Difference
 
 
-' v0.7 - 2014.03.1
+' v0.7 - 2014.03.11
 ' major rework of the polyline function
 ' miter-limit and bevel joints are in 
 ' quare captype is now working
