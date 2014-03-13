@@ -2,10 +2,16 @@ Strict
 
 ' tesselate.monkey
 ' Poly earclipper that deals with holes
+' Draw lines and  polylines with linewidth and miter/bevel joints
 ' Chuck full of usefull routines.
 ' () 2014.02.24 - Peter Scheutz aka Difference
 
 
+' v08 - 2014.03.12 new inner protrusion check
+' added angle limit befor making a joint
+' changed a lot of signs and reversed IsLeft() -  it maybe wrong but works here!
+
+' v07b - 2014.03.12 added a few safty checks
 ' v0.7 - 2014.03.11
 ' major rework of the polyline function
 ' miter-limit and bevel joints are in 
@@ -60,9 +66,9 @@ Import mojo
 Global gIntersecsX:Float
 Global gIntersecsY:Float
 
-Global gIntersectionCorner:Int
+'Global gIntersectionCorner:Int
 Const EPS:Float = 0.005
-Const EPS2:Float = 0.005
+ 
 
 Function PointsAreIdentical:Bool(x1:Float,y1:Float,x2:Float,y2:float)
 
@@ -99,11 +105,14 @@ Class Tessellator
 	' captypes: butt = 0 , round = 1, square = 2	 
 	Function TriangulateAndDrawPolyline:Void(points:Float[],linewidth:Float,closed:Bool,jointype:Int=0,captype:Int=0,miterlimit:Float=4.0)
 	
-		' captype = 2
- 	 	' linewidth = 20
-		' miterlimit = 1
- 		' closed = true
-		' DebugDrawFloatPoints points 
+		If miterlimit<1 Then miterlimit = 1
+		'If linewidth<=0 Then Return 
+	
+		'captype = 2
+		'linewidth =  30
+		'miterlimit = 1     ' 10000                                                      
+ 		'closed = false
+	'	 DebugDrawFloatPoints points 
 
 		Local fatline:= New  ThickPolyline(points,linewidth,closed,jointype,captype,miterlimit)
 		
@@ -113,7 +122,7 @@ Class Tessellator
 
 
  	Function TriangulateAndDrawPolygons:Void(polys:Float[][])
- 	
+ 		  
  		Local compoundpoly:= New CompoundPolygon(polys)
  		compoundpoly.Draw
  		
@@ -158,9 +167,21 @@ Class CompoundPolygon
 ' ****************** BEGIN Clean up input arrays
 ' IMO this sould be done by the parser
 		
-		If Not newpoints.Length() Return ' no polygons
-		If Not newpoints[0].Length() Return 'no point in first poly
+	'	If Not newpoints.Length() Return ' no polygons
+	'	If Not newpoints[0].Length() Return 'no point in first poly
  
+	
+	
+		If Not newpoints.Length() Return ' no polygons
+		If Not newpoints[0].Length() 
+			 'no point in first poly
+ 			If newpoints.Length() =  1 Then Return 
+ 			
+ 			'Throw away first poly
+ 			newpoints = newpoints[1..]	
+ 			If Not newpoints[0].Length() Return	
+ 		Endif	
+	
 	
 		' sometimes we are passed empty polys
 		If newpoints[newpoints.Length()-1].Length() = 0
@@ -334,7 +355,7 @@ Class IndexedPolygon Extends IntStack
 	' Return True if ear was clipped
 	' clipped ear indexes is in ear array	
 	Method ClipEar:Bool()
-	'	If Self.Length() <3 Then Return False
+		If Self.Length() <3 Then Return False
 	
 	
 		If Not prepared Then Prepare()
@@ -519,8 +540,11 @@ Function DebugDrawFloatPoints :Void(points:Float[])
 	
 	SetColor 0,100,0
 	For Local p:Int=0 Until  points.Length()-2 Step 2
+
+		Local r:Float = 2
+		If p = 0 r = 10
  			
-		DrawCircle points[p],points[p+1],5
+		 	DrawCircle points[p],points[p+1],r
 	Next	
 
 	SetColor 255,0,0
@@ -553,17 +577,12 @@ End function
 Function DrawTriangles:Void(points:Float[],indexes:Int[])
 
 
-	'SetAlpha 0.5
+
 
 	Local tri:Float[6]
 	For Local n:Int=0 Until  indexes.Length() Step 3
 	
-		' for visual debugging
-		'If n Mod 6
-		'	SetColor 255,0,0
-		'Else
-		'	SetColor 0,255,0		
-		'Endif
+
 	
  
  		Local tri:Float[6]
@@ -575,8 +594,31 @@ Function DrawTriangles:Void(points:Float[],indexes:Int[])
 		tri[4] = points[indexes[n+2]]
 		tri[5] = points[indexes[n+2]+1]
 
+
+' for visual debugging
+'		SetAlpha 0.5
+'		
+'		If n Mod 6
+'			SetColor 255,0,0
+'		Else
+'			SetColor 0,255,0		
+'		Endif
+
+'		If PolygonArea(tri)<0
+'			SetAlpha 0.1
+'			SetColor  Rnd(255),Rnd(255),Rnd(255)
+'		'	SetColor  0,0,0
+			
+		'	DrawText indexes[n] ,tri[0],tri[1]+Rnd(20)
+		'	DrawText indexes[n+1] ,tri[2],tri[3]+Rnd(20)
+		'	DrawText indexes[n+2] ,tri[4],tri[5]+Rnd(20)
+
+			
+'		Endif
+		
+
 		DrawPoly tri
-	
+
 	Next
 
 End Function
@@ -836,14 +878,14 @@ Function Intersects:Int(x1:Float, y1:Float, x2:Float, y2:Float, x3:Float, y3:Flo
 	Local numerb:Float = (x2-x1) * (y1-y3) - (y2-y1) * (x1-x3)
 
 	'/* Are the line coincident? */
-	If (Abs(numera) < EPS2 And Abs(numerb) < EPS2 And Abs(denom) < EPS2) Then
+	If (Abs(numera) < EPS And Abs(numerb) < EPS And Abs(denom) < EPS) Then
 		gIntersecsX = (x1 + x2) / 2
 		gIntersecsY = (y1 + y2) / 2
 		Return 1
 	Endif
 
 	'/* Are the line parallel */
-	If (Abs(denom) < EPS2) Then
+	If (Abs(denom) < EPS) Then
 		gIntersecsX = (x1 + x2) / 2
 		gIntersecsY = (y1 + y2) / 2
 		Return 0
@@ -855,17 +897,17 @@ Function Intersects:Int(x1:Float, y1:Float, x2:Float, y2:Float, x3:Float, y3:Flo
 	gIntersecsX = x1 + mua * (x2 - x1)
   	gIntersecsY = y1 + mua * (y2 - y1)
 
-	gIntersectionCorner = 0
+	'gIntersectionCorner = 0
 
 
 	If  (mua >= 0.0) And (mua <= 1.0)
 		If  (mub >= 0.0) And (mub <= 1.0)
 
-			If Abs(mub) <= EPS Then gIntersectionCorner = 1
-			If Abs(mub-1.0) <= EPS Then gIntersectionCorner += 2
+			'If Abs(mub) <= EPS Then gIntersectionCorner = 1
+			'If Abs(mub-1.0) <= EPS Then gIntersectionCorner += 2
 
-			If Abs(mua) <= EPS Then gIntersectionCorner += 10
-			If Abs(mua-1.0) <= EPS Then gIntersectionCorner += 20
+			'If Abs(mua) <= EPS Then gIntersectionCorner += 10
+			'If Abs(mua-1.0) <= EPS Then gIntersectionCorner += 20
 
 	
          	Return 4
@@ -881,6 +923,9 @@ End Function
 ' Function to check if a line segment intersects a single polygon
 ' ignoring the starting point of the line segmet
 Function SegmentIntersectsPoly:Bool(s1:Int,s2:Int,poly:IntStack,points:Float[])
+
+		If Not poly.Length() Return false
+	
 		
 		Local i2:Int = poly.Top()
 		
@@ -909,9 +954,7 @@ Function SegmentIntersectsPolys:Bool(p:Int,h:Int,polys:IndexedPolygon[],points:F
 	Next 
 	Return False
 End Function
-
-
-
+ 
  
 
 Function CrossProduct:Float(v1x:Float,v1y:Float,v2x:Float,v2y:Float)
@@ -920,7 +963,7 @@ End Function
  
 ' determine of point is right or left of directional vector 
 Function  IsLeft:Bool(ax:Float,ay:Float,bx:Float,by:Float,cx:Float,cy:Float)
-	Return ((bx - ax)*(cy - ay) - (by - ay)*(cx - ax)) > 0
+	Return ((bx - ax)*(cy - ay) - (by - ay)*(cx - ax)) < 0 ' beware thismigt be IsRigth to you...
 End Function 
  
  
@@ -934,14 +977,9 @@ Class ThickPolyline  Extends CompoundPolygon
 		orgpoints = CleanUpPolygon( orgpoints )
 	
 		If orgpoints.Length() < 4 Then Return 
-
  
-
-
 		Calculate orgpoints,linewidth,closed,jointype,captype,miterlimit
-	
-
-
+ 
 	End Method
 
 
@@ -949,15 +987,17 @@ Class ThickPolyline  Extends CompoundPolygon
 	
 		' no round joint yet, so use bevel
 		If jointype = 1 Then jointype = 2
- 	
-	
+
+		' no round captype yet, so use square
+		If captype = 1 Then captype = 2
+
+  	
  		Local tris:= New IntStack
   	
-		Local lps:= New FloatDeque
-		Local rps:= New FloatDeque
+		Local lps:= New FloatStack
+		Local rps:= New FloatStack
 
- 
- 
+ 	
 		Local halfwidth:Float = linewidth / 2.0
   
 		Local segmentcount:Int  = orgpoints.Length()/2
@@ -969,7 +1009,7 @@ Class ThickPolyline  Extends CompoundPolygon
 
 		
 		For Local seg:Int = 1 To segmentcount
-			
+	 			
 			' two line segments, p2 is the corner that we're making point for  
 			Local ax:Float = orgpoints[p1]
 			Local ay:Float	= orgpoints[p1+1]		
@@ -982,8 +1022,8 @@ Class ThickPolyline  Extends CompoundPolygon
 			Local segmentjointype:Int = jointype ' this is overridden on a per joint basis
  
 			' create a vector perpendicular to line for offsettting   line a-b
-			Local v1x:Float =  -(by-ay)
-			Local v1y:Float =  (bx-ax)		
+			Local v1x:Float =  (by-ay)
+			Local v1y:Float = -(bx-ax)		
 	
 			' normalise it
 			Local magnitude1:Float = Sqrt(v1x*v1x+v1y*v1y)
@@ -995,8 +1035,8 @@ Class ThickPolyline  Extends CompoundPolygon
 			v1y *= halfwidth
 				
 			' create a vector perpendicular to line for offsettting   line b-c
-			Local v2x:Float =  -(cy-by)
-			Local v2y:Float =  (cx-bx)			
+			Local v2x:Float =   (cy-by)
+			Local v2y:Float =  -(cx-bx)			
 	
 			' normalise it
 			Local magnitude2:Float    = Sqrt(v2x*v2x+v2y*v2y)
@@ -1009,283 +1049,344 @@ Class ThickPolyline  Extends CompoundPolygon
 			v2y *= halfwidth	
 	
  
- 
- 			' check if segment b-c is turning left or right
- 			Local isleft:Bool = IsLeft(ax,ay,bx,by,cx,cy)
- 
-  			 
-			
-			If isleft 'look at left side intersection
-				If Not Intersects(ax+v1x,ay+v1y,bx+v1x,by+v1y,bx+v2x,by+v2y,cx+v2x,cy+v2y)>=2  
-					' its a staight line or a point
-			 		segmentjointype = 3 ' straight line 
-				Endif
-			Else	' look at right side intersection
-				If Not Intersects(ax-v1x,ay-v1y,bx-v1x,by-v1y,bx-v2x,by-v2y,cx-v2x,cy-v2y)>=2  
-					' its a staight line or a point
-			 		segmentjointype = 3 ' straight line 
-			 	endif
-			endif
-			
- 			
- 			' base for indexes to the points
- 			' using two pointstacks makes for easirer visual debugging
- 			' but results in this slightly convoluted offset trick
- 			' negative indeses are for the right line
-  			Local lindex:Int = lps.Length() - 2 			
-  			Local rindex:Int = rps.Length() - 2 + 1000000
-  			
-  			Local beveltri:Int = 0
-  			
-  			
-			' check miterlimit and mark it as a bevel join if limit is crossed
-			If segmentjointype = 0
-			
-				Local mx:Float =  bx - gIntersecsX	
-				Local my:Float =  by - gIntersecsY	
-							
-				Local dist:Float = Sqrt(mx*mx+my*my)
-	
-				If dist>miterlimit *linewidth 
-					segmentjointype  = 2
-				endif
-			
-			Endif
-				
- 
-			' minimal angle before considering bevel or round
+ 			' minimal angle before considering bevel or round
 			Local angle:Float = ATan2(v2y,v2x) - ATan2(v1y,v1x)
-			If Abs(angle) < 1 Then 	segmentjointype = 3
-
-
-			' cap end point if not closed			
-			If Not closed			
-				If p2 = 0 ' first point
-					segmentjointype = 4	 ' first point	  			
-				Endif
 			
 
-				If seg = segmentcount   
-				 	segmentjointype = 5	 ' last point
-				Endif
-	
-			endif		
-			
-			Select segmentjointype
-			
-	
-				Case 0	' miter join
-					
-					If isleft
-		
-						' mirror the point around point b
-						lps.PushLast 2*bx - gIntersecsX	 	
-						lps.PushLast 2*by - gIntersecsY 	
-						
- 						
-						' panic and do something to fix protruding inner joits
-						' this will result in some self intersection
-						 If   IsLeft(cx,cy,cx- v2x,cy- v2y,gIntersecsX,gIntersecsY)	 
-						 	rps.PushLast	cx + v2x  
-						 	rps.PushLast	cy + v2y  				
- 					
-						Else
-	 						rps.PushLast gIntersecsX      
-							rps.PushLast gIntersecsY  
-						
-						Endif
-		  
-					Else
-
-						' panic and do something to fix protruding inner joits
-						' this will result in some self intersection
-						If IsLeft(cx,cy,cx- v2x,cy- v2y,gIntersecsX,gIntersecsY)		
-							lps.PushLast cx - v2x  
-							lps.PushLast cy - v2y  
- 				 		Else
- 					 		lps.PushLast gIntersecsX    
-							lps.PushLast gIntersecsY  
-			 
-				 		endif
+			Local dothisjoint:Bool = False
+			' minimum angle to previous point before inserting a joint
+			If Abs(angle) > 1.0 Then  dothisjoint = True	 
+ 
+ 			If p2 = 0  Then dothisjoint = True	 ' first point then    
+			If seg = segmentcount  dothisjoint = True	 ' last point
+ 
+			If dothisjoint
+ 
+ 
+	 			' check if segment b-c is turning left or right
+	 			Local isleft:Bool = IsLeft(ax,ay,bx,by,cx,cy)
+	 
+	  			 
 				
+				If isleft 'look at left side intersection
+					If Not Intersects(ax+v1x,ay+v1y,bx+v1x,by+v1y,bx+v2x,by+v2y,cx+v2x,cy+v2y)>=2  
+						' its a staight line or a point
+				 		segmentjointype = 3 ' straight line 
+					Endif
+				Else	' look at right side intersection
+					If Not Intersects(ax-v1x,ay-v1y,bx-v1x,by-v1y,bx-v2x,by-v2y,cx-v2x,cy-v2y)>=2  
+						' its a staight line or a point
+				 		segmentjointype = 3 ' straight line 
+				 	endif
+				endif
 				
-						rps.PushLast 2*bx - gIntersecsX	 	
-						rps.PushLast 2*by - gIntersecsY 					
-  
-					Endif		
- 			
-				Case 2
 	 			
-					If isleft
-						beveltri = 1	' flag indicates we sould add a triangle later
-	
-
-						lps.PushLast bx - v1x  
-						lps.PushLast by - v1y  
-
-	
-						lps.PushLast bx - v2x 	 
-						lps.PushLast by - v2y 	 
-						
-  
-						' panic and do something to fix protruding inner joits
-						' this will result in some self-intersection
-						 If   IsLeft(cx,cy,cx- v2x,cy- v2y,gIntersecsX,gIntersecsY)	 
-						
-						 	rps.PushLast	cx + v2x  
-						 	rps.PushLast	cy + v2y  				
- 					
-						Else
-	 						rps.PushLast gIntersecsX      
-							rps.PushLast gIntersecsY  
-						
-						Endif  
-  
-						
-					Else
-						beveltri = 2 ' flag indicates we sould add a triangle later
-						
-						
-						' panic and do something to fix protruding inner joits
-						' this will result in some self-intersection
-						If IsLeft(cx,cy,cx- v2x,cy- v2y,gIntersecsX,gIntersecsY)		
-  	
-							lps.PushLast cx - v2x  
-							lps.PushLast cy - v2y  
- 				 		Else
- 					 		lps.PushLast gIntersecsX      
-							lps.PushLast gIntersecsY  
-			 
-				 		endif	 
-
- 
-						rps.PushLast bx + v1x  
-						rps.PushLast by + v1y   
-						
-						rps.PushLast bx + v2x 	 
-						rps.PushLast by + v2y 						
-	
-	 				Endif	
-
-
-				Case 3 ' straight line joint
+	 			' base for indexes to the points
+	 			' using two pointstacks makes for easirer visual debugging
+	 			' but results in this slightly convoluted offset trick
+	 			' negative indeses are for the right line
+	  			Local lindex:Int = lps.Length() - 2 			
+	  			Local rindex:Int = rps.Length() - 2 + 1000000
+	  			
+	  			Local beveltri:Int = 0
+	  			
+	  			
+				' check miterlimit and mark it as a bevel join if limit is crossed
+				If segmentjointype = 0
 				
-					lps.PushLast bx - v2x 	 	
-					lps.PushLast by - v2y 	 
-					rps.PushLast bx +  v2x
-					rps.PushLast by +  v2y	 
-	 					
+					Local mx:Float =  bx - gIntersecsX	
+					Local my:Float =  by - gIntersecsY	
+								
+					Local dist:Float = Sqrt(mx*mx+my*my)
 		
-				Case 4 ' first point when not closed  
-				
-		 
-				
-					If captype = 2 ' squre end point, extend it by halfline width
-						lps.PushLast bx - v2x - v2y ' add square off sets ' (swap and switch signs to get unit vector
-						lps.PushLast by - v2y + v2x 
-						rps.PushLast bx + v2x - v2y  
-						rps.PushLast by + v2y + v2x 		
-				
-					Else
-						lps.PushLast bx - v2x 	 	
-						lps.PushLast by - v2y 	 
-						rps.PushLast bx + v2x
-						rps.PushLast by + v2y	 
- 					Endif
- 
- 
-
-				Case 5   ' last point when not closed  
-				
-		 			If captype = 2 ' squre end point, extend it by halfline width
-	
-						lps.PushLast bx - v1x + v1y  	
-						lps.PushLast by - v1y - v1x 
-						rps.PushLast bx + v1x + v1y  	
-						rps.PushLast by + v1y	- v1x 	
-		 			
-		 			
-		 			else
-				
-						lps.PushLast bx - v1x 	 	
-						lps.PushLast by - v1y 	 
-						rps.PushLast bx +  v1x
-						rps.PushLast by +  v1y	 
+					If dist>miterlimit *linewidth 
+						segmentjointype  = 2
 					endif
+				
+				Endif
+					
+	 
+	
+	
+	
+				' cap end point if not closed			
+				If Not closed			
+					If p2 = 0 ' first point
+						segmentjointype = 4	 ' first point	  			
+					Endif
+				
+	
+					If seg = segmentcount   
+					 	segmentjointype = 5	 ' last point
+					Endif
+		
+				endif		
+				
+				Select segmentjointype
+				
+		
+					Case 0	' miter join
+						
+						If isleft
+			
+								' mirror the point around point b
+							
+								Local meltvx:Float = bx - gIntersecsX	
+								Local meltvy:Float = by - gIntersecsY	 
+							
+							
+								rps.Push  bx + meltvx	 	
+								rps.Push  by + meltvy 							
+							
+	 
+								Local meltmagnitude:Float = Sqrt(meltvx*meltvx+meltvy*meltvy) 
+	 				 			
+	 				 			'fix inner protrutions
+	 				 			If meltmagnitude > 2*linewidth  ' this might need ajusting
+	 				 			
+	 				 		 		meltvx /=meltmagnitude
+	 				 				meltvy /=meltmagnitude	
+	 				 			
+	 				 			
+	 				 				meltmagnitude = Min(meltmagnitude,magnitude1)
+	 				 				meltmagnitude = Min(meltmagnitude,magnitude2) 				 			
+	 				 			
+	 				 			
+	 				 		 		lps.Push bx - meltvx   * meltmagnitude
+							 		lps.Push by - meltvy  	* meltmagnitude 
+								Else
+									lps.Push gIntersecsX
+									lps.Push gIntersecsY
+								
+								endif
+							 
+			  
+						Else
+						
+				 				Local meltvx:Float = bx - gIntersecsX	
+								Local meltvy:Float = by - gIntersecsY	 
+							
+							
+								lps.Push  bx + meltvx	 	
+								lps.Push  by + meltvy 	
+	 	 				 			
+								Local meltmagnitude:Float = Sqrt(meltvx*meltvx+meltvy*meltvy) 
+	 	 			 			
+	 	 			 			'fix inner protrutions	
+	 	 			 			If meltmagnitude > 2*linewidth  ' this might need ajusting
+	 		 						meltvx /=meltmagnitude
+		 				 			meltvy /=meltmagnitude
+		 				 			
+		 				 			meltmagnitude = Min(meltmagnitude,magnitude1)
+		 				 			meltmagnitude = Min(meltmagnitude,magnitude2) 				 			
+		 				 			
+		 				 		 	rps.Push bx - meltvx   * meltmagnitude
+								 	rps.Push by - meltvy  	* meltmagnitude
+								 	
+								 Else
+									 rps.Push gIntersecsX
+									 rps.Push gIntersecsY
+								 endif
+	 											
+	  
+						Endif		
+	 			
+					Case 2
+		 	 
+						If isleft
+							beveltri = 1	' flag indicates we sould add a triangle later
+		
+	
+							rps.Push bx - v1x  
+							rps.Push by - v1y  
+	
+		
+							rps.Push bx - v2x 	 
+							rps.Push by - v2y 	 
+							
+	  
+								Local meltvx:Float = bx - gIntersecsX	
+								Local meltvy:Float = by - gIntersecsY	 
+							
+ 								Local meltmagnitude:Float = Sqrt(meltvx*meltvx+meltvy*meltvy) 
+	 	 			 			
 
-			End select
+	 				 			'fix inner protrutions
+	 				 			If meltmagnitude >  2*linewidth  ' this might need ajusting
+
+	 				 				meltvx /=meltmagnitude
+	 				 				meltvy /=meltmagnitude
+	 				 			
+	 				 				meltmagnitude = Min(meltmagnitude,magnitude1)
+	 				 				meltmagnitude = Min(meltmagnitude,magnitude2) 				 			
+	 				 			
+ 	 				 		 		lps.Push bx - meltvx   * meltmagnitude
+							 		lps.Push by - meltvy  	* meltmagnitude 
+								Else
+									lps.Push gIntersecsX
+									lps.Push gIntersecsY
+								
+								endif 
+						
+						  
+	  
+							
+						Else
+							beveltri = 2 ' flag indicates we sould add a triangle later
+							
+							
+					 			Local meltvx:Float = bx - gIntersecsX	
+								Local meltvy:Float = by - gIntersecsY	 
+							
+		 	 				 			
+								Local meltmagnitude:float = Sqrt(meltvx*meltvx+meltvy*meltvy) 
+	 	 			 			
+	 	 			 			'fix inner protrutions
+	 	 			 			If meltmagnitude > 2*linewidth  ' this might need ajusting
+	 	 			 			
+	 	 				 			meltvx /=meltmagnitude
+		 				 			meltvy /=meltmagnitude
+		 				 			
+		 				 			meltmagnitude = Min(meltmagnitude,magnitude1)
+		 				 			meltmagnitude = Min(meltmagnitude,magnitude2) 				 			
+		 				 			
+		 				 		 	rps.Push bx - meltvx   * meltmagnitude
+								 	rps.Push by - meltvy  	* meltmagnitude
+								 	
+								 Else
+									 rps.Push gIntersecsX
+									 rps.Push gIntersecsY
+								 endif 
+	 
+	 
+							lps.Push bx + v1x  
+							lps.Push by + v1y   
+							
+							lps.Push bx + v2x 	 
+							lps.Push by + v2y 						
+		
+		 				Endif	
+	
+	
+					Case 3 ' straight line joint
+					
+						rps.Push bx - v2x 	 	
+						rps.Push by - v2y 	 
+						lps.Push bx +  v2x
+						lps.Push by +  v2y	 
+		 					
+			
+					Case 4 ' first point when not closed  
+					
 			 
-			' Add the triangles 
-			' the line body
-			If lindex>=0
 					
-				tris.Push lindex
-				tris.Push lindex + 2 
-				tris.Push - rindex   
-	 		 '			
-				tris.Push lindex  + 2
-				tris.Push -rindex - 2  
-				tris.Push -rindex 
- 		 
- 		 
- 		 		' add bevel fillers
-			 	If beveltri = 1
-			
-					tris.Push lindex + 2
-					tris.Push lindex + 4 
-					tris.Push -rindex -2  
- 			 	
-			 	Elseif  beveltri = 2
-			
-			 		tris.Push lindex  + 2
-			 		tris.Push -rindex -4 
-			 		tris.Push -rindex -2
-				 	
-			 	Endif
+						If captype = 2 ' squre end point, extend it by halfline width
+							rps.Push bx - v2x + v2y ' add square off sets ' (swap and switch signs to get unit vector)
+							rps.Push by - v2y - v2x 
+							lps.Push bx + v2x + v2y  
+							lps.Push by + v2y - v2x 		
 					
-			Endif	 
- 
+						Else
+							rps.Push bx - v2x 	 	
+							rps.Push by - v2y 	 
+							lps.Push bx + v2x
+							lps.Push by + v2y	 
+	 					Endif
+	 
+	 
+	
+					Case 5   ' last point when not closed  
+					
+			 			If captype = 2 ' squre end point, extend it by halfline width
+		
+							rps.Push bx - v1x - v1y  	
+							rps.Push by - v1y + v1x 
+							lps.Push bx + v1x - v1y  	
+							lps.Push by + v1y + v1x 	
+			 			
+			 			
+			 			else
+					
+							rps.Push bx - v1x 	 	
+							rps.Push by - v1y 	 
+							lps.Push bx +  v1x
+							lps.Push by +  v1y	 
+						endif
+	
+				End select
+				 
+				' Add the triangles 
+				' the line body
+				If lindex>=0
+						
+					tris.Push lindex
+					tris.Push lindex + 2 
+					tris.Push - rindex   
+		 		 '			
+					tris.Push lindex  + 2
+					tris.Push -rindex - 2  
+					tris.Push -rindex 
+	 		 
+	 		 
+	 		 		' add bevel fillers
+				 	If beveltri = 2
+				
+						tris.Push lindex + 2
+						tris.Push lindex + 4 
+						tris.Push -rindex -2  
+						
+	 
+				 	Elseif  beveltri = 1
+				
+				 		tris.Push lindex  + 2
+				 		tris.Push -rindex -4 
+				 		tris.Push -rindex -2
+					 	
+				 	Endif
+						
+				Endif	
+				
+				p1 = p2
+			 
+			Endif
 
-			p1 = p2
+			
 			p2 = p3
 			p3 += 2
 	
 		
 
 			
-		If p3>=	orgpoints.Length()	p3 -= orgpoints.Length()
-	'	If p2>=	orgpoints.Length()	p2 -= 	orgpoints.Length()
-	'	If p1>=	orgpoints.Length()	p1 -= 	orgpoints.Length()		
-	
+			If p3>=	orgpoints.Length()	p3 -= orgpoints.Length()
+		'	If p2>=	orgpoints.Length()	p2 -= 	orgpoints.Length()
+		'	If p1>=	orgpoints.Length()	p1 -= 	orgpoints.Length()		
+		
 							
-	Next		
+		Next	
 	
-	 		
+  		
 		Local offset:Int = lps.Length()  
 
-	'	DebugDrawFloatPoints rps.ToArray()
-  	'	DebugDrawFloatPoints lps.ToArray()
+ 		'DebugDrawFloatPoints rps.ToArray()
+ 		'DebugDrawFloatPoints lps.ToArray()
   		
  
-		' append right side to left
+ 		' append right side to left
 		For Local d:= Eachin rps
-			lps.PushLast d
+			lps.Push d
 		Next
  
 		points = lps.ToArray()
 		
-		triangleindexes = tris.ToArray()	
-		
-		
-		
+ 		triangleindexes = tris.ToArray()	
+ 		
 		For Local i:Int = 0 Until triangleindexes.Length()
  			If triangleindexes[i] < -900000 Then
 				triangleindexes[i] += 1000000  ' correct the negative index
 				triangleindexes[i] = offset - triangleindexes[i]   ' add offset and correct negative index
-			endif
-		
+			Endif
 	 	Next	
-
+ 
 	End Method
  
 

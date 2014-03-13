@@ -3,6 +3,7 @@
 ' By Lee Wade/CopperCircle
 '--------------------------
 
+'v0.9 - Added tesselate v0.8 and multi point L commands.
 'v0.8 - Fixed split to sub paths on SVG_M, make sure stroke/polylines scale in size/alpha.
 'v0.7 - Refactored some code, added tesselate v0.6, added support for rgb and named colours, added stroke/polyline, added basic text support.
 'v0.6 - Added tesselate v0.3, added svg T/t commands.
@@ -50,7 +51,8 @@ Class SVG_Demo Extends App
 	Field font:Image
 
 	Method OnCreate:Int()
-		test.LoadSVG("graph.svg")
+		test.LoadSVG("test2.svg")
+		'test.LoadSVG("graph.svg")
 		'test.LoadSVG("tiger.svg")
 		'test.LoadSVG("monkey.svg")
 		'test.LoadSVG("text.svg")
@@ -330,8 +332,10 @@ Class SVG
 				
 			Case SVG_L
 				Local points:Float[]=GetPoints(value)
-				px=points[0] ; py=points[1]
-				AddToPoly(px, py)		
+				For Local p:Int=0 To points.Length-1 Step 2
+					px=points[p] ; py=points[p+1]
+					AddToPoly(px, py)
+				Next		
 	
 			Case SVG_l
 				Local points:Float[]=GetPoints(value)
