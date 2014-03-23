@@ -60,7 +60,6 @@ THE SOFTWARE.
 #end
 
 Import mojo
- 
 
 
 Global gIntersecsX:Float
@@ -103,7 +102,7 @@ Class Tessellator
 
 	' jointype: miter = 0 , round = 1, bevel = 2	  	 
 	' captypes: butt = 0 , round = 1, square = 2	 
-	Function TriangulateAndDrawPolyline:Void(points:Float[],linewidth:Float,closed:Bool,jointype:Int=0,captype:Int=0,miterlimit:Float=4.0)
+	Function TriangulateAndDrawPolyline:Void(points:Float[],linewidth:Float,closed:Bool,jointype:Int=0,captype:Int=0,miterlimit:Float=4.0, scale:Float=1.0)
 	
 		If miterlimit<1 Then miterlimit = 1
 		'If linewidth<=0 Then Return 
@@ -114,16 +113,16 @@ Class Tessellator
  		'closed = false
 	'	 DebugDrawFloatPoints points 
 
-		Local fatline:= New  ThickPolyline(points,linewidth,closed,jointype,captype,miterlimit)
+		Local fatline:= New  ThickPolyline(points,linewidth,closed,jointype,captype,miterlimit,scale)
 		
 		fatline.Draw()
 
 	End Function
 
 
- 	Function TriangulateAndDrawPolygons:Void(polys:Float[][])
+ 	Function TriangulateAndDrawPolygons:Void(polys:Float[][],scale:Float=1.0)
  		  
- 		Local compoundpoly:= New CompoundPolygon(polys)
+ 		Local compoundpoly:= New CompoundPolygon(polys, scale)
  		compoundpoly.Draw
  		
 	End Function	
@@ -143,6 +142,7 @@ Class CompoundPolygon
  
 	Field _losttriangles:Int
 	
+	Field scale:Float
 	
 	Field bridgecount:Int
 	
@@ -156,13 +156,10 @@ Class CompoundPolygon
  
  	Field mergedpoly:IndexedPolygon
  	
-  
-  
  
- 
-	Method New(newpoints:Float[][])
+	Method New(newpoints:Float[][], scale:Float)
 
-	 
+		Self.scale=scale
 
 ' ****************** BEGIN Clean up input arrays
 ' IMO this sould be done by the parser
@@ -245,12 +242,10 @@ Class CompoundPolygon
 		Tessellate(points,mergedpoly)
  
 	End Method
-
-
 	
 	Method Draw:Void()		
  	
-		DrawTriangles(points,triangleindexes)
+		DrawTriangles(points,triangleindexes, scale)
  		
 	End Method	
 	
@@ -303,7 +298,6 @@ Class CompoundPolygon
 	
 End Class
 
-	
 
 Class IndexedPolygon Extends IntStack
 
@@ -387,11 +381,6 @@ Class IndexedPolygon Extends IntStack
 	End Method	
 
 End Class
-
-
-
-
-
 
 
 'Bool pointInPolygon() {
@@ -574,7 +563,7 @@ End function
 ' This function should be a part of mojo, for speed and because
 ' drawing this way will often leave seams between the trangles
 ' because of hardware antialiasing functions
-Function DrawTriangles:Void(points:Float[],indexes:Int[])
+Function DrawTriangles:Void(points:Float[],indexes:Int[],scale:Float)
 
 
 
@@ -587,12 +576,12 @@ Function DrawTriangles:Void(points:Float[],indexes:Int[])
  
  		Local tri:Float[6]
  		
-		tri[0] = points[indexes[n]]
-		tri[1] = points[indexes[n]+1]
-		tri[2] = points[indexes[n+1]]
-		tri[3] = points[indexes[n+1]+1]				
-		tri[4] = points[indexes[n+2]]
-		tri[5] = points[indexes[n+2]+1]
+		tri[0] = points[indexes[n]]*scale
+		tri[1] = points[indexes[n]+1]*scale
+		tri[2] = points[indexes[n+1]]*scale
+		tri[3] = points[indexes[n+1]+1]*scale			
+		tri[4] = points[indexes[n+2]]*scale
+		tri[5] = points[indexes[n+2]+1]*scale
 
 
 ' for visual debugging
@@ -972,8 +961,10 @@ Class ThickPolyline  Extends CompoundPolygon
 
 	' jointype: miter = 0 , round = 1, bevel = 2	  	 
 	' captypes: butt = 0 , round = 1, square = 2		 
-	Method New(orgpoints:Float[],linewidth:Float,closed:Bool,jointype:Int,captype:Int,miterlimit:Float)
+	Method New(orgpoints:Float[],linewidth:Float,closed:Bool,jointype:Int,captype:Int,miterlimit:Float,scale:Float)
 	
+		Self.scale=scale
+		
 		orgpoints = CleanUpPolygon( orgpoints )
 	
 		If orgpoints.Length() < 4 Then Return 
@@ -983,7 +974,7 @@ Class ThickPolyline  Extends CompoundPolygon
 	End Method
 
 
-	Method Calculate:Void(orgpoints:Float[],linewidth:Float,closed:Bool,jointype:Int,captype:Int,miterlimit:Float )
+	Method Calculate:Void(orgpoints:Float[],linewidth:Float,closed:Bool,jointype:Int,captype:Int,miterlimit:Float)
 	
 		' no round joint yet, so use bevel
 		If jointype = 1 Then jointype = 2
@@ -1012,11 +1003,11 @@ Class ThickPolyline  Extends CompoundPolygon
 	 			
 			' two line segments, p2 is the corner that we're making point for  
 			Local ax:Float = orgpoints[p1]
-			Local ay:Float	= orgpoints[p1+1]		
+			Local ay:Float	= orgpoints[p1+1]
 			Local bx:Float = orgpoints[p2]
 			Local by:Float	= orgpoints[p2+1]
 			Local cx:Float = orgpoints[p3]
-			Local cy:Float	= orgpoints[p3+1]		
+			Local cy:Float	= orgpoints[p3+1]
 			
 
 			Local segmentjointype:Int = jointype ' this is overridden on a per joint basis

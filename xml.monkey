@@ -1842,7 +1842,7 @@ Function ParseXML:XMLDoc(raw:String, error:XMLError = Null, options:Int = XML_ST
 						'move the raw index on
 						rawIndex = rawPos + COMMENT_CLOSE.Length - 1
 						
-						Print raw[rawIndex..]
+						'Print raw[rawIndex..]
 						
 					ElseIf XMLHasStringAtOffset(COMMENT_OPEN, raw, rawIndex)
 						'start of a comment
